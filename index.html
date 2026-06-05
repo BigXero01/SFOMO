@@ -1,0 +1,1351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SFOMO — AI Agent Trading Bot</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --black:    #07070e;
+      --deep:     #0d0d1a;
+      --surface:  #111122;
+      --card:     #141428;
+      --border:   #1e1e38;
+      --gold:     #c9a84c;
+      --gold-dim: #8a6f2e;
+      --silver:   #9090b0;
+      --text:     #dcdcf0;
+      --muted:    #6060a0;
+      --success:  #3dffa0;
+      --danger:   #ff4466;
+      --purple:   #7b2fff;
+      --cyan:     #00d4ff;
+      --glow-gold: 0 0 40px rgba(201,168,76,0.18);
+      --glow-cyan: 0 0 40px rgba(0,212,255,0.12);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--black);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-weight: 400;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ── Noise grain overlay ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 999;
+    }
+
+    /* ── Typography ── */
+    .gothic { font-family: 'Cinzel', serif; }
+    .mono   { font-family: 'JetBrains Mono', monospace; }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: var(--deep); }
+    ::-webkit-scrollbar-thumb { background: var(--gold-dim); border-radius: 2px; }
+
+    /* ── Nav ── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.2rem 2.5rem;
+      background: rgba(7,7,14,0.82);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(201,168,76,0.10);
+    }
+
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+    }
+
+    .nav-sigil {
+      width: 36px; height: 36px;
+      border: 1.5px solid var(--gold);
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Cinzel', serif;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--gold);
+      letter-spacing: 1px;
+      position: relative;
+    }
+    .nav-sigil::before, .nav-sigil::after {
+      content: '';
+      position: absolute;
+      inset: 3px;
+      border: 1px solid rgba(201,168,76,0.25);
+    }
+    .nav-sigil::after { inset: 6px; border-color: rgba(201,168,76,0.12); }
+
+    .nav-title {
+      font-family: 'Cinzel', serif;
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: 3px;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+      list-style: none;
+    }
+    .nav-links a {
+      color: var(--silver);
+      text-decoration: none;
+      font-size: 0.75rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--gold); }
+
+    .nav-cta {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.6rem 1.4rem;
+      border-radius: 2px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+      font-family: 'Cinzel', serif;
+    }
+
+    .btn-primary {
+      background: var(--gold);
+      color: var(--black);
+    }
+    .btn-primary:hover {
+      background: #e0bb5c;
+      box-shadow: 0 0 28px rgba(201,168,76,0.4);
+      transform: translateY(-1px);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--gold);
+      border: 1px solid var(--gold-dim);
+    }
+    .btn-ghost:hover {
+      border-color: var(--gold);
+      background: rgba(201,168,76,0.06);
+    }
+
+    /* ── Hero ── */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 8rem 2rem 6rem;
+      position: relative;
+    }
+
+    /* Radial aurora bg */
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -20%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 900px; height: 900px;
+      background: radial-gradient(ellipse at center,
+        rgba(123,47,255,0.08) 0%,
+        rgba(201,168,76,0.06) 35%,
+        transparent 70%);
+      pointer-events: none;
+    }
+
+    /* Horizontal rule ornament */
+    .hero-rule {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 2.5rem;
+    }
+    .hero-rule span {
+      font-family: 'Cinzel', serif;
+      font-size: 0.65rem;
+      letter-spacing: 5px;
+      text-transform: uppercase;
+      color: var(--gold);
+    }
+    .hero-rule::before, .hero-rule::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(to right, transparent, var(--gold-dim), transparent);
+      max-width: 120px;
+    }
+
+    .hero-label {
+      font-family: 'Cinzel', serif;
+      font-size: 0.65rem;
+      letter-spacing: 8px;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 1.5rem;
+    }
+
+    .hero-title {
+      font-family: 'Cinzel', serif;
+      font-size: clamp(3.5rem, 10vw, 7.5rem);
+      font-weight: 900;
+      line-height: 0.9;
+      letter-spacing: 8px;
+      text-transform: uppercase;
+      color: transparent;
+      background: linear-gradient(135deg,
+        #f0e6c0 0%,
+        #c9a84c 30%,
+        #f0e6c0 50%,
+        #c9a84c 70%,
+        #8a6f2e 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      margin-bottom: 1.5rem;
+      position: relative;
+    }
+
+    .hero-subtitle {
+      font-family: 'Cinzel', serif;
+      font-size: clamp(0.7rem, 1.5vw, 0.9rem);
+      letter-spacing: 6px;
+      text-transform: uppercase;
+      color: var(--silver);
+      margin-bottom: 2.5rem;
+    }
+
+    .hero-desc {
+      max-width: 560px;
+      color: var(--silver);
+      font-size: 1rem;
+      line-height: 1.8;
+      margin-bottom: 3rem;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 5rem;
+    }
+
+    /* Live stats bar */
+    .hero-stats {
+      display: flex;
+      gap: 0;
+      border: 1px solid var(--border);
+      background: var(--card);
+    }
+    .hero-stat {
+      padding: 1.25rem 2.5rem;
+      border-right: 1px solid var(--border);
+      text-align: center;
+    }
+    .hero-stat:last-child { border-right: none; }
+    .hero-stat-val {
+      font-family: 'Cinzel', serif;
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: var(--gold);
+      display: block;
+    }
+    .hero-stat-label {
+      font-size: 0.65rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    /* ── Section skeleton ── */
+    section {
+      padding: 7rem 2rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .section-label {
+      font-family: 'Cinzel', serif;
+      font-size: 0.65rem;
+      letter-spacing: 6px;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 0.75rem;
+    }
+
+    .section-title {
+      font-family: 'Cinzel', serif;
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 1rem;
+      line-height: 1.2;
+    }
+
+    .section-desc {
+      color: var(--silver);
+      max-width: 580px;
+      margin-bottom: 4rem;
+      line-height: 1.8;
+    }
+
+    /* Divider */
+    .divider {
+      width: 100%;
+      height: 1px;
+      background: linear-gradient(to right,
+        transparent, rgba(201,168,76,0.25) 30%,
+        rgba(201,168,76,0.25) 70%, transparent);
+    }
+
+    /* ── Pipeline / Flow ── */
+    .flow {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0;
+      margin-bottom: 4rem;
+    }
+    .flow-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 1.2rem 1.4rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      min-width: 130px;
+      position: relative;
+      transition: all 0.3s;
+    }
+    .flow-step:hover {
+      border-color: var(--gold-dim);
+      background: #1a1a30;
+      transform: translateY(-3px);
+      box-shadow: var(--glow-gold);
+    }
+    .flow-step-num {
+      font-family: 'Cinzel', serif;
+      font-size: 0.6rem;
+      letter-spacing: 3px;
+      color: var(--gold);
+      margin-bottom: 0.5rem;
+    }
+    .flow-step-icon {
+      font-size: 1.5rem;
+      margin-bottom: 0.4rem;
+    }
+    .flow-step-name {
+      font-family: 'Cinzel', serif;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 1px;
+      color: var(--text);
+    }
+    .flow-arrow {
+      width: 32px;
+      height: 1px;
+      background: linear-gradient(to right, var(--gold-dim), transparent);
+      position: relative;
+      flex-shrink: 0;
+    }
+    .flow-arrow::after {
+      content: '▶';
+      position: absolute;
+      right: -4px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 0.55rem;
+      color: var(--gold-dim);
+    }
+
+    /* ── Agents grid ── */
+    .agents-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+    }
+
+    .agent-card {
+      background: var(--card);
+      padding: 2.5rem;
+      position: relative;
+      overflow: hidden;
+      transition: background 0.3s;
+    }
+    .agent-card:hover { background: #181830; }
+
+    .agent-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(to right, transparent, var(--gold), transparent);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .agent-card:hover::before { opacity: 1; }
+
+    .agent-num {
+      font-family: 'Cinzel', serif;
+      font-size: 0.6rem;
+      letter-spacing: 4px;
+      color: var(--gold);
+      margin-bottom: 1rem;
+    }
+    .agent-icon {
+      font-size: 2rem;
+      margin-bottom: 1rem;
+      display: block;
+    }
+    .agent-name {
+      font-family: 'Cinzel', serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 0.75rem;
+      letter-spacing: 1px;
+    }
+    .agent-desc {
+      color: var(--silver);
+      font-size: 0.9rem;
+      line-height: 1.7;
+      margin-bottom: 1.5rem;
+    }
+    .agent-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+    .tag {
+      padding: 0.2rem 0.6rem;
+      border: 1px solid var(--border);
+      font-size: 0.65rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--muted);
+      letter-spacing: 0.5px;
+    }
+    .tag-gold {
+      border-color: var(--gold-dim);
+      color: var(--gold);
+    }
+
+    /* ── Principles ── */
+    .principles-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+
+    .principle-card {
+      padding: 2rem;
+      border: 1px solid var(--border);
+      background: var(--card);
+      position: relative;
+      transition: all 0.3s;
+    }
+    .principle-card:hover {
+      border-color: rgba(201,168,76,0.3);
+      box-shadow: var(--glow-gold);
+      transform: translateY(-2px);
+    }
+
+    .principle-icon {
+      width: 44px; height: 44px;
+      border: 1px solid var(--gold-dim);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem;
+      margin-bottom: 1.25rem;
+    }
+    .principle-title {
+      font-family: 'Cinzel', serif;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 0.5rem;
+      letter-spacing: 0.5px;
+    }
+    .principle-body {
+      color: var(--silver);
+      font-size: 0.85rem;
+      line-height: 1.7;
+    }
+
+    /* ── Stack ── */
+    .stack-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+    }
+
+    .stack-group {
+      background: var(--card);
+      padding: 2rem;
+    }
+    .stack-group-label {
+      font-family: 'Cinzel', serif;
+      font-size: 0.65rem;
+      letter-spacing: 5px;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 1.5rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .stack-item {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 0.75rem;
+      font-size: 0.85rem;
+      color: var(--silver);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .stack-dot {
+      width: 4px; height: 4px;
+      background: var(--gold-dim);
+      flex-shrink: 0;
+    }
+
+    /* ── Security section ── */
+    .security-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 1rem;
+    }
+    .security-card {
+      padding: 1.75rem;
+      border: 1px solid var(--border);
+      background: var(--card);
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+    .security-badge {
+      flex-shrink: 0;
+      padding: 0.25rem 0.5rem;
+      font-size: 0.6rem;
+      font-family: 'Cinzel', serif;
+      letter-spacing: 1px;
+      font-weight: 700;
+    }
+    .badge-critical { background: rgba(255,68,102,0.12); color: var(--danger); border: 1px solid rgba(255,68,102,0.3); }
+    .badge-high     { background: rgba(255,171,0,0.10); color: #ffab00; border: 1px solid rgba(255,171,0,0.3); }
+    .badge-fixed    { background: rgba(61,255,160,0.10); color: var(--success); border: 1px solid rgba(61,255,160,0.3); }
+    .security-text { font-size: 0.85rem; color: var(--silver); line-height: 1.6; }
+    .security-text strong { color: var(--text); font-weight: 500; display: block; margin-bottom: 0.25rem; }
+
+    /* ── API quick ref ── */
+    .api-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+    }
+    .api-table th {
+      text-align: left;
+      padding: 0.75rem 1.25rem;
+      font-family: 'Cinzel', serif;
+      font-size: 0.6rem;
+      letter-spacing: 3px;
+      color: var(--gold);
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+    }
+    .api-table td {
+      padding: 0.9rem 1.25rem;
+      border-bottom: 1px solid rgba(30,30,56,0.5);
+      vertical-align: middle;
+    }
+    .api-table tr:hover td { background: rgba(201,168,76,0.03); }
+    .method-get    { color: var(--cyan); }
+    .method-post   { color: var(--success); }
+    .method-ws     { color: var(--purple); }
+    .method-delete { color: var(--danger); }
+    .route { color: var(--text); }
+    .api-auth {
+      display: inline-block;
+      padding: 0.15rem 0.45rem;
+      font-size: 0.6rem;
+      background: rgba(201,168,76,0.1);
+      color: var(--gold);
+      border: 1px solid rgba(201,168,76,0.2);
+    }
+    .api-desc { color: var(--silver); }
+
+    /* ── Quick start ── */
+    .terminal {
+      background: #070710;
+      border: 1px solid var(--border);
+      padding: 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .terminal::before {
+      content: '●  ●  ●';
+      display: block;
+      color: var(--muted);
+      font-size: 0.65rem;
+      letter-spacing: 4px;
+      margin-bottom: 1.5rem;
+    }
+    .terminal::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(to right, transparent, var(--gold-dim), transparent);
+    }
+    .terminal code {
+      display: block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      line-height: 1.9;
+      color: var(--text);
+      white-space: pre;
+    }
+    .cmd-prompt { color: var(--gold); user-select: none; }
+    .cmd-comment { color: var(--muted); }
+    .cmd-string { color: var(--cyan); }
+    .cmd-keyword { color: var(--purple); }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 3rem 2.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+      background: var(--deep);
+    }
+    .footer-brand {
+      font-family: 'Cinzel', serif;
+      font-size: 0.8rem;
+      letter-spacing: 4px;
+      color: var(--gold);
+    }
+    .footer-note {
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    .footer-links {
+      display: flex;
+      gap: 1.5rem;
+    }
+    .footer-links a {
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-decoration: none;
+      letter-spacing: 1px;
+      transition: color 0.2s;
+    }
+    .footer-links a:hover { color: var(--gold); }
+
+    /* ── Animations ── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .anim { animation: fadeUp 0.7s ease both; }
+    .anim-d1 { animation-delay: 0.1s; }
+    .anim-d2 { animation-delay: 0.2s; }
+    .anim-d3 { animation-delay: 0.3s; }
+    .anim-d4 { animation-delay: 0.4s; }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      nav { padding: 1rem 1.5rem; }
+      .nav-links { display: none; }
+      .hero-stats { flex-wrap: wrap; }
+      .hero-stat { min-width: 50%; border-right: none; border-bottom: 1px solid var(--border); }
+      .flow { gap: 0.5rem; }
+      .flow-arrow { display: none; }
+      footer { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Navigation ── -->
+<nav>
+  <a href="#" class="nav-brand">
+    <div class="nav-sigil">SF</div>
+    <span class="nav-title">SFOMO</span>
+  </a>
+  <ul class="nav-links">
+    <li><a href="#agents">Agents</a></li>
+    <li><a href="#strategy">Strategy</a></li>
+    <li><a href="#security">Security</a></li>
+    <li><a href="#stack">Stack</a></li>
+    <li><a href="#quickstart">Deploy</a></li>
+  </ul>
+  <div class="nav-cta">
+    <a href="https://github.com/BigXero01/SFOMO" class="btn btn-ghost" target="_blank" rel="noopener">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+      GitHub
+    </a>
+    <a href="#quickstart" class="btn btn-primary">Deploy Now</a>
+  </div>
+</nav>
+
+<!-- ── Hero ── -->
+<section class="hero" style="max-width:100%; padding-top:9rem;">
+  <div class="hero-rule anim">
+    <span>Institutional Grade</span>
+  </div>
+
+  <p class="hero-label anim anim-d1">AI Agent Trading System</p>
+
+  <h1 class="hero-title anim anim-d2">SFOMO</h1>
+
+  <p class="hero-subtitle anim anim-d2">
+    Smart Funds &nbsp;·&nbsp; Order Management &nbsp;·&nbsp; Operations
+  </p>
+
+  <p class="hero-desc anim anim-d3">
+    Six autonomous AI agents working in concert — from market intelligence to
+    compounding capital — guided by elite trader discipline and regime-adaptive
+    strategy weights.
+  </p>
+
+  <div class="hero-actions anim anim-d4">
+    <a href="#quickstart" class="btn btn-primary">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      Quick Start
+    </a>
+    <a href="https://github.com/BigXero01/SFOMO" class="btn btn-ghost" target="_blank" rel="noopener">View Source</a>
+    <a href="#agents" class="btn btn-ghost">Explore Agents</a>
+  </div>
+
+  <div class="hero-stats anim anim-d4">
+    <div class="hero-stat">
+      <span class="hero-stat-val">6</span>
+      <span class="hero-stat-label">AI Agents</span>
+    </div>
+    <div class="hero-stat">
+      <span class="hero-stat-val">5</span>
+      <span class="hero-stat-label">Strategies</span>
+    </div>
+    <div class="hero-stat">
+      <span class="hero-stat-val">0.5%</span>
+      <span class="hero-stat-label">Risk / Trade</span>
+    </div>
+    <div class="hero-stat">
+      <span class="hero-stat-val">15%</span>
+      <span class="hero-stat-label">Kill Switch</span>
+    </div>
+    <div class="hero-stat">
+      <span class="hero-stat-val">1.5×</span>
+      <span class="hero-stat-label">Min R:R</span>
+    </div>
+  </div>
+</section>
+
+<div class="divider" style="max-width:1200px;margin:0 auto;"></div>
+
+<!-- ── Pipeline Flow ── -->
+<section id="flow">
+  <p class="section-label">Architecture</p>
+  <h2 class="section-title">The Pipeline</h2>
+  <p class="section-desc">
+    Every cycle executes the same deterministic sequence — from raw market data
+    to compounding capital — with the learning agent feeding back into future cycles.
+  </p>
+
+  <div class="flow">
+    <div class="flow-step">
+      <span class="flow-step-num">01</span>
+      <span class="flow-step-icon">📡</span>
+      <span class="flow-step-name">Market<br>Data</span>
+    </div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step">
+      <span class="flow-step-num">02</span>
+      <span class="flow-step-icon">🧠</span>
+      <span class="flow-step-name">AI<br>Analysis</span>
+    </div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step">
+      <span class="flow-step-num">03</span>
+      <span class="flow-step-icon">⚡</span>
+      <span class="flow-step-name">Signal<br>Generation</span>
+    </div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step">
+      <span class="flow-step-num">04</span>
+      <span class="flow-step-icon">🛡</span>
+      <span class="flow-step-name">Risk<br>Validation</span>
+    </div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step">
+      <span class="flow-step-num">05</span>
+      <span class="flow-step-icon">⚖️</span>
+      <span class="flow-step-name">Smart<br>Execution</span>
+    </div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step">
+      <span class="flow-step-num">06</span>
+      <span class="flow-step-icon">📈</span>
+      <span class="flow-step-name">Portfolio<br>Update</span>
+    </div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step">
+      <span class="flow-step-num">07</span>
+      <span class="flow-step-icon">🔄</span>
+      <span class="flow-step-name">Compounding<br>Engine</span>
+    </div>
+    <div class="flow-arrow"></div>
+    <div class="flow-step">
+      <span class="flow-step-num">08</span>
+      <span class="flow-step-icon">🎓</span>
+      <span class="flow-step-name">Learning<br>Loop</span>
+    </div>
+  </div>
+</section>
+
+<div class="divider" style="max-width:1200px;margin:0 auto;"></div>
+
+<!-- ── Agents ── -->
+<section id="agents">
+  <p class="section-label">Core Modules</p>
+  <h2 class="section-title">The Six Agents</h2>
+  <p class="section-desc">
+    Each agent is a LangGraph node — stateless, auditable, independently
+    replaceable. They share a typed <code style="font-family:'JetBrains Mono',monospace;color:var(--gold);font-size:0.9em;">TradingState</code> object across the pipeline.
+  </p>
+
+  <div class="agents-grid">
+    <div class="agent-card">
+      <div class="agent-num">AGENT 01</div>
+      <span class="agent-icon">📡</span>
+      <h3 class="agent-name">Market Intelligence</h3>
+      <p class="agent-desc">
+        Fetches OHLCV, order books, funding rates, open interest, fear &amp; greed,
+        and on-chain metrics. GPT-4o classifies market regime into 7 categories
+        and identifies key support/resistance levels.
+      </p>
+      <div class="agent-tags">
+        <span class="tag tag-gold">GPT-4o</span>
+        <span class="tag">CCXT</span>
+        <span class="tag">Glassnode</span>
+        <span class="tag">Fear &amp; Greed</span>
+        <span class="tag">7 Regimes</span>
+      </div>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-num">AGENT 02</div>
+      <span class="agent-icon">⚡</span>
+      <h3 class="agent-name">Strategy</h3>
+      <p class="agent-desc">
+        Runs all five strategies in parallel, adjusts weights by detected regime,
+        then uses GPT-4o to filter the raw signal pool down to only high-conviction
+        setups with minimum 1.5:1 R:R ratio.
+      </p>
+      <div class="agent-tags">
+        <span class="tag tag-gold">LLM Filter</span>
+        <span class="tag">5 Strategies</span>
+        <span class="tag">Regime Weights</span>
+        <span class="tag">R:R Guard</span>
+      </div>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-num">AGENT 03</div>
+      <span class="agent-icon">🛡</span>
+      <h3 class="agent-name">Risk Management</h3>
+      <p class="agent-desc">
+        Kelly-adjusted position sizing, parametric VaR at 95% confidence,
+        Sharpe and Sortino tracking, and a Redis-persistent kill switch
+        that survives restarts and cannot be bypassed.
+      </p>
+      <div class="agent-tags">
+        <span class="tag tag-gold">Kill Switch</span>
+        <span class="tag">VaR 95%</span>
+        <span class="tag">Kelly Sizing</span>
+        <span class="tag">Sortino</span>
+        <span class="tag">Redis-backed</span>
+      </div>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-num">AGENT 04</div>
+      <span class="agent-icon">⚖️</span>
+      <h3 class="agent-name">Execution</h3>
+      <p class="agent-desc">
+        Smart order routing with TWAP slicing for large orders, 0.3% max
+        slippage guard, real-time order book liquidity checks, and an
+        immutable audit log written to TimescaleDB on every fill.
+      </p>
+      <div class="agent-tags">
+        <span class="tag tag-gold">TWAP</span>
+        <span class="tag">VWAP</span>
+        <span class="tag">Audit Log</span>
+        <span class="tag">Slippage Guard</span>
+        <span class="tag">CCXT</span>
+      </div>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-num">AGENT 05</div>
+      <span class="agent-icon">📈</span>
+      <h3 class="agent-name">Portfolio Manager</h3>
+      <p class="agent-desc">
+        Tracks equity curve, peak/drawdown in real time, reinvests 80% of
+        realized profits via the compounding engine, and detects when
+        positions have drifted beyond 5% of target weights.
+      </p>
+      <div class="agent-tags">
+        <span class="tag tag-gold">Compounding</span>
+        <span class="tag">Drawdown Track</span>
+        <span class="tag">PyPortfolioOpt</span>
+        <span class="tag">Rebalance</span>
+      </div>
+    </div>
+
+    <div class="agent-card">
+      <div class="agent-num">AGENT 06</div>
+      <span class="agent-icon">🎓</span>
+      <h3 class="agent-name">Learning</h3>
+      <p class="agent-desc">
+        After every cycle, GPT-4o evaluates performance, adjusts strategy
+        weights by ±10%, detects regime persistence, and embeds cycle
+        summaries into Qdrant for semantic retrieval in future cycles.
+      </p>
+      <div class="agent-tags">
+        <span class="tag tag-gold">RL Feedback</span>
+        <span class="tag">Qdrant</span>
+        <span class="tag">Weight Adapt</span>
+        <span class="tag">Regime Memory</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider" style="max-width:1200px;margin:0 auto;"></div>
+
+<!-- ── Strategies ── -->
+<section id="strategy">
+  <p class="section-label">Signal Generation</p>
+  <h2 class="section-title">Five Strategies, One Pool</h2>
+  <p class="section-desc">
+    All five strategies generate signals independently. The Strategy Agent
+    regime-weights them, then the LLM filter selects only the highest-conviction
+    setups across all strategies.
+  </p>
+
+  <div class="principles-grid">
+    <div class="principle-card">
+      <div class="principle-icon">📊</div>
+      <h4 class="principle-title">Trend Following</h4>
+      <p class="principle-body">EMA 20/50 crossover with RSI confirmation filter. Rides directional momentum in bull and bear regimes. Weight amplified to 1.5× in trending markets.</p>
+    </div>
+    <div class="principle-card">
+      <div class="principle-icon">🚀</div>
+      <h4 class="principle-title">Momentum Breakout</h4>
+      <p class="principle-body">Donchian 20-period channel breakout requiring 1.5× average volume confirmation. Captures explosive moves at the start of new trends.</p>
+    </div>
+    <div class="principle-card">
+      <div class="principle-icon">🔄</div>
+      <h4 class="principle-title">Mean Reversion</h4>
+      <p class="principle-body">Bollinger Band touch with RSI extreme confirmation. Fades overextended moves in ranging markets. Weight 1.5× in sideways regimes.</p>
+    </div>
+    <div class="principle-card">
+      <div class="principle-icon">⚡</div>
+      <h4 class="principle-title">Volatility Arb</h4>
+      <p class="principle-body">Exploits funding rate extremes on perpetual futures. Extreme positive funding → fade longs. Negative funding → fade shorts. Contrarian by nature.</p>
+    </div>
+    <div class="principle-card">
+      <div class="principle-icon">🔃</div>
+      <h4 class="principle-title">Portfolio Rotation</h4>
+      <p class="principle-body">Ranks all trading pairs by risk-adjusted momentum (ATR-normalized). Rotates capital into the top 2 performers each cycle.</p>
+    </div>
+    <div class="principle-card">
+      <div class="principle-icon">🧠</div>
+      <h4 class="principle-title">Regime Adaptation</h4>
+      <p class="principle-body">Strategy weights shift dynamically. Bull trend amplifies momentum; ranging markets amplify mean reversion; high volatility amplifies vol arb by 1.8×.</p>
+    </div>
+  </div>
+</section>
+
+<div class="divider" style="max-width:1200px;margin:0 auto;"></div>
+
+<!-- ── Elite Principles ── -->
+<section>
+  <p class="section-label">Philosophy</p>
+  <h2 class="section-title">Elite Trader Principles</h2>
+  <p class="section-desc">
+    Rules encoded into the system, not aspirations on paper.
+    Every trade must satisfy all constraints or it does not execute.
+  </p>
+
+  <div class="principles-grid">
+    <div class="principle-card">
+      <div class="principle-icon">🔐</div>
+      <h4 class="principle-title">Capital First</h4>
+      <p class="principle-body">15% portfolio drawdown triggers a Redis-persistent kill switch. All trading halts. Manual operator reset required. State survives restarts.</p>
+    </div>
+    <div class="principle-card">
+      <div class="principle-icon">🎯</div>
+      <h4 class="principle-title">High Conviction Only</h4>
+      <p class="principle-body">GPT-4o filters raw signals. Minimum 55% confidence score. Minimum 1.5:1 risk-reward. Signals below threshold are discarded, not traded.</p>
+    </div>
+    <div class="principle-card">
+      <div class="principle-icon">📏</div>
+      <h4 class="principle-title">Precise Sizing</h4>
+      <p class="principle-body">Kelly criterion adjusted by signal confidence. 0.25–0.5% equity at risk per trade. Hard cap at 20% of equity per position.</p>
+    </div>
+    <div class="principle-card">
+      <div class="principle-icon">📈</div>
+      <h4 class="principle-title">Compound Winners</h4>
+      <p class="principle-body">80% of realized profits are reinvested each cycle via the compounding engine. 20% reserved as buffer. Allocation proportional to strategy weights.</p>
+    </div>
+    <div class="principle-card">
+      <div class="principle-icon">🌊</div>
+      <h4 class="principle-title">Regime Awareness</h4>
+      <p class="principle-body">Seven market regimes detected per cycle. Strategy weights dynamically adjust. No strategy runs at full weight in an adverse regime.</p>
+    </div>
+    <div class="principle-card">
+      <div class="principle-icon">📋</div>
+      <h4 class="principle-title">Full Auditability</h4>
+      <p class="principle-body">Every order — filled or failed — writes to an immutable TimescaleDB audit log. Every cycle is embedded in Qdrant for post-mortem analysis.</p>
+    </div>
+  </div>
+</section>
+
+<div class="divider" style="max-width:1200px;margin:0 auto;"></div>
+
+<!-- ── Security ── -->
+<section id="security">
+  <p class="section-label">Enterprise Security</p>
+  <h2 class="section-title">25 Vulnerabilities Fixed</h2>
+  <p class="section-desc">
+    A full enterprise security audit was completed against OWASP Top 10 and
+    financial-system threat models. Every finding was resolved before production.
+  </p>
+
+  <div class="security-grid">
+    <div class="security-card">
+      <span class="security-badge badge-fixed">FIXED</span>
+      <div class="security-text">
+        <strong>API Authentication (A07)</strong>
+        X-API-Key bearer token required on all /api/v1/* endpoints and WebSocket. No unauthenticated access to any data or operation.
+      </div>
+    </div>
+    <div class="security-card">
+      <span class="security-badge badge-fixed">FIXED</span>
+      <div class="security-text">
+        <strong>Persistent Kill Switch</strong>
+        Redis-backed kill switch survives restarts and is shared across all workers. Cannot be bypassed by redeployment.
+      </div>
+    </div>
+    <div class="security-card">
+      <span class="security-badge badge-fixed">FIXED</span>
+      <div class="security-text">
+        <strong>Race Condition (A07)</strong>
+        asyncio.Lock protects all reads and writes to shared cycle state. Concurrent requests cannot corrupt the signal pipeline.
+      </div>
+    </div>
+    <div class="security-card">
+      <span class="security-badge badge-fixed">FIXED</span>
+      <div class="security-text">
+        <strong>Prompt Injection (A04)</strong>
+        All user-controlled and external values sanitized before LLM injection. Pydantic schemas validate every LLM response.
+      </div>
+    </div>
+    <div class="security-card">
+      <span class="security-badge badge-fixed">FIXED</span>
+      <div class="security-text">
+        <strong>Infrastructure Hardening</strong>
+        Redis requirepass, Qdrant API key, all ports bound to 127.0.0.1. Credentials via env vars with required validation.
+      </div>
+    </div>
+    <div class="security-card">
+      <span class="security-badge badge-fixed">FIXED</span>
+      <div class="security-text">
+        <strong>Rate Limiting + DoS Protection</strong>
+        5-minute per-IP cooldown on cycle triggers. WebSocket capped at 50 connections and 4-hour session limit.
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider" style="max-width:1200px;margin:0 auto;"></div>
+
+<!-- ── Stack ── -->
+<section id="stack">
+  <p class="section-label">Technology</p>
+  <h2 class="section-title">The Stack</h2>
+  <p class="section-desc">Production-grade components chosen for reliability, performance, and ecosystem maturity.</p>
+
+  <div class="stack-grid">
+    <div class="stack-group">
+      <div class="stack-group-label">AI Layer</div>
+      <div class="stack-item"><div class="stack-dot"></div>GPT-4o</div>
+      <div class="stack-item"><div class="stack-dot"></div>LangGraph</div>
+      <div class="stack-item"><div class="stack-dot"></div>LangChain</div>
+      <div class="stack-item"><div class="stack-dot"></div>text-embedding-3-small</div>
+      <div class="stack-item"><div class="stack-dot"></div>Qdrant</div>
+    </div>
+    <div class="stack-group">
+      <div class="stack-group-label">Backend</div>
+      <div class="stack-item"><div class="stack-dot"></div>Python 3.12</div>
+      <div class="stack-item"><div class="stack-dot"></div>FastAPI</div>
+      <div class="stack-item"><div class="stack-dot"></div>asyncio</div>
+      <div class="stack-item"><div class="stack-dot"></div>Pydantic v2</div>
+      <div class="stack-item"><div class="stack-dot"></div>Redis Streams</div>
+    </div>
+    <div class="stack-group">
+      <div class="stack-group-label">Trading</div>
+      <div class="stack-item"><div class="stack-dot"></div>CCXT (multi-exchange)</div>
+      <div class="stack-item"><div class="stack-dot"></div>Pandas + NumPy</div>
+      <div class="stack-item"><div class="stack-dot"></div>PyPortfolioOpt</div>
+      <div class="stack-item"><div class="stack-dot"></div>CoinGlass</div>
+      <div class="stack-item"><div class="stack-dot"></div>Glassnode</div>
+    </div>
+    <div class="stack-group">
+      <div class="stack-group-label">Storage</div>
+      <div class="stack-item"><div class="stack-dot"></div>PostgreSQL 15</div>
+      <div class="stack-item"><div class="stack-dot"></div>TimescaleDB</div>
+      <div class="stack-item"><div class="stack-dot"></div>Redis 7</div>
+      <div class="stack-item"><div class="stack-dot"></div>Qdrant</div>
+      <div class="stack-item"><div class="stack-dot"></div>SQLAlchemy async</div>
+    </div>
+    <div class="stack-group">
+      <div class="stack-group-label">Frontend</div>
+      <div class="stack-item"><div class="stack-dot"></div>Next.js 15</div>
+      <div class="stack-item"><div class="stack-dot"></div>TypeScript</div>
+      <div class="stack-item"><div class="stack-dot"></div>Tailwind CSS</div>
+      <div class="stack-item"><div class="stack-dot"></div>Recharts</div>
+      <div class="stack-item"><div class="stack-dot"></div>WebSocket stream</div>
+    </div>
+    <div class="stack-group">
+      <div class="stack-group-label">Infrastructure</div>
+      <div class="stack-item"><div class="stack-dot"></div>Docker Compose</div>
+      <div class="stack-item"><div class="stack-dot"></div>Railway / Vercel</div>
+      <div class="stack-item"><div class="stack-dot"></div>GitHub Actions CI</div>
+      <div class="stack-item"><div class="stack-dot"></div>Ruff + mypy</div>
+      <div class="stack-item"><div class="stack-dot"></div>pytest-asyncio</div>
+    </div>
+  </div>
+</section>
+
+<div class="divider" style="max-width:1200px;margin:0 auto;"></div>
+
+<!-- ── API Reference ── -->
+<section>
+  <p class="section-label">API Reference</p>
+  <h2 class="section-title">Endpoints</h2>
+  <p class="section-desc">All endpoints require <code style="font-family:'JetBrains Mono',monospace;color:var(--gold);font-size:0.9em;">X-API-Key</code> header except <code style="font-family:'JetBrains Mono',monospace;color:var(--cyan);font-size:0.9em;">GET /health</code>.</p>
+
+  <table class="api-table" style="border:1px solid var(--border); background:var(--card);">
+    <thead>
+      <tr>
+        <th>Method</th>
+        <th>Route</th>
+        <th>Auth</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="method-get">GET</td>
+        <td class="route">/health</td>
+        <td></td>
+        <td class="api-desc">System status + database probe</td>
+      </tr>
+      <tr>
+        <td class="method-get">GET</td>
+        <td class="route">/api/v1/portfolio/snapshot</td>
+        <td><span class="api-auth">KEY</span></td>
+        <td class="api-desc">Current equity, cash, drawdown</td>
+      </tr>
+      <tr>
+        <td class="method-get">GET</td>
+        <td class="route">/api/v1/portfolio/history</td>
+        <td><span class="api-auth">KEY</span></td>
+        <td class="api-desc">Equity curve history (limit 1–10000)</td>
+      </tr>
+      <tr>
+        <td class="method-get">GET</td>
+        <td class="route">/api/v1/portfolio/performance</td>
+        <td><span class="api-auth">KEY</span></td>
+        <td class="api-desc">Win rate, PnL, profit factor</td>
+      </tr>
+      <tr>
+        <td class="method-get">GET</td>
+        <td class="route">/api/v1/trades/recent</td>
+        <td><span class="api-auth">KEY</span></td>
+        <td class="api-desc">Trade history (limit 1–500)</td>
+      </tr>
+      <tr>
+        <td class="method-get">GET</td>
+        <td class="route">/api/v1/trades/by-strategy</td>
+        <td><span class="api-auth">KEY</span></td>
+        <td class="api-desc">Trades grouped by strategy</td>
+      </tr>
+      <tr>
+        <td class="method-post">POST</td>
+        <td class="route">/api/v1/signals/run-cycle</td>
+        <td><span class="api-auth">KEY</span></td>
+        <td class="api-desc">Trigger one trading cycle (rate-limited 1/5min)</td>
+      </tr>
+      <tr>
+        <td class="method-get">GET</td>
+        <td class="route">/api/v1/signals/last-cycle</td>
+        <td><span class="api-auth">KEY</span></td>
+        <td class="api-desc">Last cycle state, regime, signals</td>
+      </tr>
+      <tr>
+        <td class="method-post">POST</td>
+        <td class="route">/api/v1/admin/kill-switch/reset</td>
+        <td><span class="api-auth">KEY</span></td>
+        <td class="api-desc">Re-enable trading after kill switch fires</td>
+      </tr>
+      <tr>
+        <td class="method-ws">WS</td>
+        <td class="route">/ws?api_key=…</td>
+        <td><span class="api-auth">KEY</span></td>
+        <td class="api-desc">Real-time signals, orders, portfolio stream</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<div class="divider" style="max-width:1200px;margin:0 auto;"></div>
+
+<!-- ── Quick Start ── -->
+<section id="quickstart">
+  <p class="section-label">Deployment</p>
+  <h2 class="section-title">Quick Start</h2>
+  <p class="section-desc">
+    Docker Compose runs the full stack locally in minutes.
+    Paper trading is enabled by default — no real funds at risk.
+  </p>
+
+  <div class="terminal">
+    <code><span class="cmd-comment"># 1 — Clone and generate secrets</span>
+<span class="cmd-prompt">$ </span>git clone https://github.com/BigXero01/SFOMO.git && cd SFOMO
+<span class="cmd-prompt">$ </span>cp .env.example .env
+<span class="cmd-prompt">$ </span>python -c <span class="cmd-string">"import secrets; print(secrets.token_hex(32))"</span>  <span class="cmd-comment"># → SECRET_KEY</span>
+<span class="cmd-prompt">$ </span>python -c <span class="cmd-string">"import secrets; print(secrets.token_hex(32))"</span>  <span class="cmd-comment"># → API_KEY</span>
+
+<span class="cmd-comment"># 2 — Fill in .env (OPENAI_API_KEY, exchange credentials, secrets above)</span>
+<span class="cmd-prompt">$ </span>nano .env
+
+<span class="cmd-comment"># 3 — Start full stack (Postgres, Redis, Qdrant, backend, frontend)</span>
+<span class="cmd-prompt">$ </span>make up
+
+<span class="cmd-comment"># 4 — Watch logs</span>
+<span class="cmd-prompt">$ </span>make logs
+
+<span class="cmd-comment"># 5 — Open dashboard and API docs</span>
+<span class="cmd-prompt">$ </span>open http://localhost:3000    <span class="cmd-comment"># Dashboard</span>
+<span class="cmd-prompt">$ </span>open http://localhost:8000/docs  <span class="cmd-comment"># Swagger UI (dev only)</span>
+
+<span class="cmd-comment"># 6 — Trigger your first cycle</span>
+<span class="cmd-prompt">$ </span>curl -X POST http://localhost:8000/api/v1/signals/run-cycle \
+     -H <span class="cmd-string">"X-API-Key: YOUR_API_KEY"</span> \
+     -H <span class="cmd-string">"Content-Type: application/json"</span> \
+     -d <span class="cmd-string">'{"symbols":["BTC/USDT","ETH/USDT"],"timeframe":"1h"}'</span></code>
+  </div>
+
+  <div style="margin-top:2rem; display:flex; gap:1rem; flex-wrap:wrap;">
+    <div style="flex:1;min-width:240px;padding:1.5rem;border:1px solid var(--border);background:var(--card);">
+      <h4 style="font-family:'Cinzel',serif;font-size:0.85rem;color:var(--gold);margin-bottom:0.75rem;letter-spacing:1px;">Deploy: Frontend</h4>
+      <p style="font-size:0.82rem;color:var(--silver);line-height:1.7;">Import <code style="font-family:'JetBrains Mono',monospace;color:var(--cyan);">BigXero01/SFOMO</code> on Vercel, set root directory to <code style="font-family:'JetBrains Mono',monospace;color:var(--cyan);">frontend</code>, add <code style="font-family:'JetBrains Mono',monospace;color:var(--cyan);">NEXT_PUBLIC_API_URL</code>. Auto-deploys on every push.</p>
+    </div>
+    <div style="flex:1;min-width:240px;padding:1.5rem;border:1px solid var(--border);background:var(--card);">
+      <h4 style="font-family:'Cinzel',serif;font-size:0.85rem;color:var(--gold);margin-bottom:0.75rem;letter-spacing:1px;">Deploy: Backend</h4>
+      <p style="font-size:0.82rem;color:var(--silver);line-height:1.7;">Import on Railway, set root to <code style="font-family:'JetBrains Mono',monospace;color:var(--cyan);">backend</code>. Add PostgreSQL + Redis plugins — Railway injects connection strings automatically.</p>
+    </div>
+    <div style="flex:1;min-width:240px;padding:1.5rem;border:1px solid var(--border);background:var(--card);">
+      <h4 style="font-family:'Cinzel',serif;font-size:0.85rem;color:var(--gold);margin-bottom:0.75rem;letter-spacing:1px;">Vector DB</h4>
+      <p style="font-size:0.82rem;color:var(--silver);line-height:1.7;">Create a free cluster on <a href="https://cloud.qdrant.io" style="color:var(--cyan);text-decoration:none;">Qdrant Cloud</a>, add the URL and API key to Railway environment variables.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ── -->
+<footer>
+  <div class="footer-brand">SFOMO</div>
+  <p class="footer-note">Paper trading by default · EXCHANGE_SANDBOX=true · Not financial advice</p>
+  <div class="footer-links">
+    <a href="https://github.com/BigXero01/SFOMO" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://github.com/BigXero01/SFOMO/blob/main/README.md">Docs</a>
+    <a href="https://github.com/BigXero01/SFOMO/issues">Issues</a>
+    <a href="#quickstart">Deploy</a>
+  </div>
+</footer>
+
+<script>
+  // Intersection observer for scroll-triggered fade-in on cards
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.style.opacity = '1';
+        e.target.style.transform = 'translateY(0)';
+        observer.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.1 });
+
+  document.querySelectorAll(
+    '.agent-card, .principle-card, .stack-group, .security-card, .flow-step'
+  ).forEach(el => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(18px)';
+    el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+    observer.observe(el);
+  });
+</script>
+
+</body>
+</html>
