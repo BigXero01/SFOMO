@@ -80,6 +80,22 @@ CREATE TABLE IF NOT EXISTS cycle_summaries (
     summary JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id SERIAL PRIMARY KEY,
+    action TEXT NOT NULL,
+    symbol TEXT,
+    side TEXT,
+    size DOUBLE PRECISION,
+    price DOUBLE PRECISION,
+    order_id TEXT,
+    cycle_id TEXT,
+    status TEXT,
+    detail TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+SELECT create_hypertable('audit_logs', 'created_at', if_not_exists => TRUE);
 """
 
 
@@ -202,5 +218,39 @@ class DatabaseService:
             await session.execute(
                 text("INSERT INTO strategy_weights (weights) VALUES (:w)"),
                 {"w": json.dumps(weights)},
+            )
+            await session.commit()
+
+    async def record_audit_log(
+        self,
+        action: str,
+        cycle_id: str,
+        symbol: str = "",
+        side: str = "",
+        size: float = 0.0,
+        price: float = 0.0,
+        order_id: str = "",
+        status: str = "ok",
+        detail: str = "",
+    ) -> None:
+        """Immutable audit trail for every execution event."""
+        async with AsyncSessionLocal() as session:
+            await session.execute(
+                text(
+                    "INSERT INTO audit_logs "
+                    "(action, symbol, side, size, price, order_id, cycle_id, status, detail) "
+                    "VALUES (:action, :symbol, :side, :size, :price, :order_id, :cycle_id, :status, :detail)"
+                ),
+                {
+                    "action": action,
+                    "symbol": symbol,
+                    "side": side,
+                    "size": size,
+                    "price": price,
+                    "order_id": order_id,
+                    "cycle_id": cycle_id,
+                    "status": status,
+                    "detail": detail,
+                },
             )
             await session.commit()

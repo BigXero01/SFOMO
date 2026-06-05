@@ -8,6 +8,7 @@ from loguru import logger
 
 from config import get_settings
 from core.state import ExecutedOrder, OrderSide, PositionSize, TradingState
+from services.database import DatabaseService
 from services.exchange import ExchangeService
 
 settings = get_settings()
@@ -29,6 +30,7 @@ async def execution_node(state: TradingState) -> TradingState:
         return state
 
     exchange = ExchangeService()
+    db = DatabaseService()
     executed: List[ExecutedOrder] = []
     failed: List[Dict[str, Any]] = []
 
@@ -43,9 +45,26 @@ async def execution_node(state: TradingState) -> TradingState:
                         f"side={order.side.value} price={order.price:.4f} "
                         f"size={order.size:.6f} slippage={order.slippage_pct:.4%}"
                     )
+                    await db.record_audit_log(
+                        action="order_filled",
+                        cycle_id=state.cycle_id,
+                        symbol=order.symbol,
+                        side=order.side.value,
+                        size=order.size,
+                        price=order.price,
+                        order_id=order.order_id,
+                        status="filled",
+                    )
             except Exception as e:
-                logger.error(f"[Execution] order failed {position.symbol}: {e}")
+                logger.error(f"[Execution] order failed {position.symbol}: {e}", exc_info=True)
                 failed.append({"symbol": position.symbol, "error": str(e)})
+                await db.record_audit_log(
+                    action="order_failed",
+                    cycle_id=state.cycle_id,
+                    symbol=position.symbol,
+                    status="failed",
+                    detail=str(e),
+                )
 
     finally:
         await exchange.close()

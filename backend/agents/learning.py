@@ -89,7 +89,14 @@ async def learning_node(state: TradingState) -> TradingState:
         ]
 
         response = await _llm.ainvoke(messages)
-        feedback = json.loads(response.content)
+        try:
+            feedback = json.loads(response.content)
+            if not isinstance(feedback, dict):
+                raise ValueError("LLM feedback response is not a JSON object")
+        except (json.JSONDecodeError, ValueError) as exc:
+            logger.error(f"[Learning] LLM response validation failed: {exc}")
+            state.errors.append("learning: invalid LLM response")
+            return state
         state.rl_feedback = feedback
 
         # ── Apply weight adjustments ───────────────────────────────
@@ -183,11 +190,16 @@ def _apply_weight_adjustments(
 
 
 def _build_cycle_summary(state: TradingState, feedback: Dict[str, Any]) -> str:
+    # Ternary is hoisted out to avoid operator precedence bug
+    drawdown_part = (
+        f"Drawdown: {state.portfolio.current_drawdown:.2%} | "
+        if state.portfolio else ""
+    )
     return (
         f"Cycle {state.cycle_id} | "
         f"Regime: {state.market_regime.value} | "
         f"Signals: {len(state.raw_signals)} raw, {len(state.filtered_signals)} filtered | "
         f"Executed: {len(state.executed_orders)} orders | "
-        f"Drawdown: {state.portfolio.current_drawdown:.2%} | " if state.portfolio else "" +
+        f"{drawdown_part}"
         f"Lessons: {', '.join(feedback.get('lessons', [])[:3])}"
     )

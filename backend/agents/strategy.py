@@ -140,16 +140,28 @@ async def strategy_node(state: TradingState) -> TradingState:
             HumanMessage(content="Filter and rank these signals."),
         ]
         response = await _llm.ainvoke(messages)
-        filtered_data = json.loads(response.content)
-        filtered_signals = [TradingSignal(**s) for s in filtered_data]
-        state.filtered_signals = filtered_signals
+        try:
+            filtered_data = json.loads(response.content)
+            if not isinstance(filtered_data, list):
+                raise ValueError("LLM response is not a JSON array")
+            # Validate each signal through Pydantic — rejects malformed LLM output
+            filtered_signals = []
+            for item in filtered_data[:settings.max_open_positions]:
+                try:
+                    filtered_signals.append(TradingSignal(**item))
+                except Exception as exc:
+                    logger.warning(f"[Strategy] dropped invalid signal: {exc}")
+        except (json.JSONDecodeError, ValueError) as exc:
+            logger.error(f"[Strategy] LLM response invalid JSON: {exc}")
+            raise
 
+        state.filtered_signals = filtered_signals
         state.agent_messages.append(
             f"[Strategy] raw={len(raw_signals)} filtered={len(filtered_signals)} "
             f"regime_weights={regime_weights}"
         )
-    except Exception as e:
-        logger.error(f"[Strategy] LLM filter error: {e}")
+    except Exception as exc:
+        logger.error(f"[Strategy] LLM filter error: {exc}")
         # Fallback: use top signals by confidence
         state.filtered_signals = sorted(raw_signals, key=lambda s: s.confidence, reverse=True)[
             : settings.max_open_positions

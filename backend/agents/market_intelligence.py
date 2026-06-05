@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List
+import re
+from typing import Any, Dict, List, Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from loguru import logger
+from pydantic import BaseModel, ValidationError, field_validator
 
 from config import get_settings
 from core.state import MarketRegime, TradingState
@@ -43,6 +45,37 @@ Analyze the provided market data and return a JSON object with:
   "opportunities": ["<list of opportunities>"]
 }
 Return only valid JSON, no markdown."""
+
+_UNSAFE_RE = re.compile(r"[\x00-\x1f\x7f]")  # control chars
+
+
+def _sanitize(value: str, max_len: int = 20) -> str:
+    """Strip control characters that could break prompt structure."""
+    return _UNSAFE_RE.sub(" ", value)[:max_len]
+
+
+class _MarketAnalysis(BaseModel):
+    """Validated schema for LLM market analysis response."""
+    regime: str
+    structure: dict = {}
+    sentiment: dict = {}
+    key_levels: dict = {}
+    news_summary: str = ""
+    risk_flags: List[str] = []
+    opportunities: List[str] = []
+
+    @field_validator("regime")
+    @classmethod
+    def _valid_regime(cls, v: str) -> str:
+        valid = {r.value for r in MarketRegime}
+        if v not in valid:
+            return MarketRegime.RANGING.value
+        return v
+
+    @field_validator("news_summary")
+    @classmethod
+    def _cap_news(cls, v: str) -> str:
+        return v[:500]
 
 
 def _compute_technical_context(candles: Dict[str, Any]) -> str:
@@ -93,6 +126,9 @@ async def market_intelligence_node(state: TradingState) -> TradingState:
 
         tech_context = _compute_technical_context(candles)
 
+        # Sanitize any user-controlled or external values before injecting into prompt
+        safe_timeframe = _sanitize(state.timeframe, max_len=4)
+
         messages = [
             SystemMessage(content=SYSTEM_PROMPT),
             HumanMessage(
@@ -101,17 +137,23 @@ async def market_intelligence_node(state: TradingState) -> TradingState:
                     f"Sentiment scores: {json.dumps(sentiment)}\n"
                     f"Funding rates: {json.dumps(funding_rates)}\n"
                     f"On-chain metrics: {json.dumps(on_chain)}\n"
-                    f"Analyze for timeframe: {state.timeframe}"
+                    f"Analyze for timeframe: {safe_timeframe}"
                 )
             ),
         ]
 
         response = await _llm.ainvoke(messages)
-        analysis = json.loads(response.content)
+        try:
+            raw = json.loads(response.content)
+            analysis = _MarketAnalysis(**raw)
+        except (json.JSONDecodeError, ValidationError) as exc:
+            logger.error(f"[MarketIntelligence] LLM response validation failed: {exc}")
+            state.errors.append(f"market_intelligence: invalid LLM response")
+            return state
 
-        regime = MarketRegime(analysis.get("regime", "ranging"))
-        structure = analysis.get("structure", {})
-        sentiment_data = analysis.get("sentiment", {})
+        regime = MarketRegime(analysis.regime)
+        structure = analysis.structure
+        sentiment_data = analysis.sentiment
 
         state.candles = candles
         state.order_books = order_books

@@ -37,7 +37,8 @@ class PositionSizer:
         max_usd = equity * 0.20
         if size_usd > max_usd:
             size_usd = max_usd
-            size_units = size_usd / current_price
+            # current_price already validated > 0 above
+            size_units = size_usd / current_price if current_price > 0 else 0.0
 
         return PositionSize(
             symbol=signal.symbol,

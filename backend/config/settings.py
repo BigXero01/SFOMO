@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from typing import List
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_IS_TEST = os.getenv("APP_ENV", "") == "test"
 
 
 class Settings(BaseSettings):
@@ -13,7 +16,36 @@ class Settings(BaseSettings):
     # ── App ────────────────────────────────────────────────────
     app_env: str = "development"
     log_level: str = "INFO"
-    secret_key: str = "dev-secret"
+    # Required in all non-test environments (min 32 chars)
+    secret_key: str = Field(default="")
+    # API bearer token — required in all non-test environments
+    api_key: str = Field(default="")
+
+    @field_validator("secret_key")
+    @classmethod
+    def _require_secret_key(cls, v: str) -> str:
+        if _IS_TEST:
+            return v or "test-secret-key-32-chars-minimum!!"
+        if not v:
+            raise ValueError(
+                "SECRET_KEY must be set in environment (min 32 chars). "
+                "Generate: python -c \"import secrets; print(secrets.token_hex(32))\""
+            )
+        if len(v) < 32:
+            raise ValueError("SECRET_KEY must be at least 32 characters")
+        return v
+
+    @field_validator("api_key")
+    @classmethod
+    def _require_api_key(cls, v: str) -> str:
+        if _IS_TEST:
+            return v or "test-api-key"
+        if not v:
+            raise ValueError(
+                "API_KEY must be set in environment. "
+                "Generate: python -c \"import secrets; print(secrets.token_hex(32))\""
+            )
+        return v
 
     # ── OpenAI ─────────────────────────────────────────────────
     openai_api_key: str = ""

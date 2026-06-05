@@ -20,7 +20,11 @@ async def risk_management_node(state: TradingState) -> TradingState:
     logger.info(f"[RiskManagement] cycle={state.cycle_id}")
 
     db = DatabaseService()
-    kill_switch = KillSwitch(max_drawdown=settings.max_portfolio_drawdown)
+    # KillSwitch is Redis-backed — persists across restarts and workers
+    kill_switch = KillSwitch(
+        redis_url=settings.redis_url,
+        max_drawdown=settings.max_portfolio_drawdown,
+    )
     position_sizer = PositionSizer(
         risk_per_trade=settings.risk_per_trade,
         base_currency=settings.base_currency,
@@ -37,8 +41,8 @@ async def risk_management_node(state: TradingState) -> TradingState:
         peak_equity = portfolio.peak_equity if portfolio else equity
         current_drawdown = (peak_equity - equity) / peak_equity if peak_equity > 0 else 0.0
 
-        # ── Kill switch check ──────────────────────────────────────
-        if kill_switch.should_trigger(current_drawdown):
+        # ── Kill switch check (Redis-persistent) ──────────────────
+        if await kill_switch.should_trigger(current_drawdown):
             logger.warning(
                 f"[RiskManagement] Kill switch triggered! drawdown={current_drawdown:.2%}"
             )
@@ -126,8 +130,10 @@ async def risk_management_node(state: TradingState) -> TradingState:
         )
 
     except Exception as e:
-        logger.error(f"[RiskManagement] error: {e}")
+        logger.error(f"[RiskManagement] error: {e}", exc_info=True)
         state.errors.append(f"risk_management: {str(e)}")
+    finally:
+        await kill_switch.close()
 
     return state
 
