@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0f1117;
+  --card: #1a1d27;
+  --border: #2a2d3e;
+  --brand: #00d4ff;
+  --success: #00e676;
+  --danger: #ff4444;
+  --warning: #ffab00;
+  --text-primary: #e8eaf6;
+  --text-muted: #7c85a2;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: "Inter", system-ui, sans-serif;
+}
+
+.card {
+  @apply bg-surface-card border border-surface-border rounded-xl p-4;
+}
+
+.stat-label {
+  @apply text-xs text-[#7c85a2] uppercase tracking-wider;
+}
+
+.stat-value {
+  @apply text-2xl font-bold font-mono;
+}
+
+.badge-long {
+  @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-success/20 text-success;
+}
+
+.badge-short {
+  @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-danger/20 text-danger;
+}
+
+.badge-neutral {
+  @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-[#2a2d3e] text-[#7c85a2];
+}
+
+/* Custom recharts tooltip */
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+}

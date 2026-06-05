@@ -1,0 +1,60 @@
+# ── Web Framework ──────────────────────────────────────────────
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+pydantic==2.10.3
+pydantic-settings==2.6.1
+python-multipart==0.0.20
+
+# ── AI / LLM ───────────────────────────────────────────────────
+openai==1.58.1
+langchain==0.3.12
+langchain-openai==0.2.12
+langchain-community==0.3.12
+langgraph==0.2.60
+langchain-qdrant==0.2.0
+
+# ── Vector DB ──────────────────────────────────────────────────
+qdrant-client==1.12.1
+
+# ── Exchange ───────────────────────────────────────────────────
+ccxt==4.4.25
+
+# ── Database ───────────────────────────────────────────────────
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+alembic==1.14.0
+psycopg2-binary==2.9.10
+
+# ── Cache / Messaging ──────────────────────────────────────────
+redis[hiredis]==5.2.1
+aioredis==2.0.1
+
+# ── Quant / Analytics ──────────────────────────────────────────
+pandas==2.2.3
+numpy==2.2.0
+scipy==1.14.1
+PyPortfolioOpt==1.5.6
+vectorbt==0.26.2
+ta==0.11.0
+pandas-ta==0.3.14b
+
+# ── HTTP ───────────────────────────────────────────────────────
+httpx==0.28.1
+aiohttp==3.11.10
+websockets==14.1
+
+# ── Utilities ──────────────────────────────────────────────────
+python-dotenv==1.0.1
+loguru==0.7.3
+orjson==3.10.12
+tenacity==9.0.0
+schedule==1.2.2
+pytz==2024.2
+python-dateutil==2.9.0
+
+# ── Dev / Testing ──────────────────────────────────────────────
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-mock==3.14.0
+ruff==0.8.4
+mypy==1.14.0
