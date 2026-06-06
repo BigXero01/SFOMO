@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sfomo — AI Agent Trading Bot</title>
+<style>
+  :root {
+    --gold:    #c9a84c;
+    --gold2:   #e8c86a;
+    --surface: #07070e;
+    --card:    #0b0d1a;
+    --border:  #1a1f35;
+    --text:    #e8eaf6;
+    --muted:   #7c85a2;
+    --dim:     #3d4461;
+    --success: #4ade80;
+    --danger:  #f87171;
+    --info:    #60a5fa;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--surface);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--surface); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* ── Typography ── */
+  h1, h2, h3, h4 { font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
+  a { color: var(--gold); text-decoration: none; }
+  a:hover { color: var(--gold2); }
+
+  /* ── Noise overlay ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: .4;
+  }
+
+  /* ── Layout helpers ── */
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+  .section { padding: 96px 0; }
+  .section-sm { padding: 64px 0; }
+
+  /* ── NAV ── */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0;
+    z-index: 100;
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(16px);
+    background: rgba(7,7,14,.85);
+    padding: 0 24px;
+  }
+  .nav-inner {
+    max-width: 1100px; margin: 0 auto;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 60px;
+  }
+  .nav-logo {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 1.1rem; font-weight: 800; letter-spacing: -.02em;
+    color: var(--text);
+  }
+  .nav-logo-mark {
+    width: 32px; height: 32px;
+    background: var(--gold);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .7rem; font-weight: 900; color: var(--surface);
+    letter-spacing: .05em;
+  }
+  .nav-links { display: flex; gap: 28px; font-size: .85rem; color: var(--muted); }
+  .nav-links a { color: var(--muted); transition: color .2s; }
+  .nav-links a:hover { color: var(--text); }
+  .nav-cta {
+    background: var(--gold);
+    color: var(--surface);
+    padding: 7px 18px;
+    border-radius: 6px;
+    font-size: .82rem;
+    font-weight: 700;
+    transition: background .2s, transform .15s;
+  }
+  .nav-cta:hover { background: var(--gold2); color: var(--surface); transform: translateY(-1px); }
+
+  /* ── HERO ── */
+  .hero {
+    padding: 160px 0 96px;
+    text-align: center;
+    position: relative;
+  }
+  .hero::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 50%; transform: translateX(-50%);
+    width: 700px; height: 700px;
+    background: radial-gradient(circle, rgba(201,168,76,.07) 0%, transparent 70%);
+    pointer-events: none;
+    border-radius: 50%;
+  }
+  .hero-eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(201,168,76,.1);
+    border: 1px solid rgba(201,168,76,.25);
+    color: var(--gold);
+    font-size: .75rem;
+    font-weight: 600;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    padding: 6px 16px;
+    border-radius: 100px;
+    margin-bottom: 28px;
+  }
+  .hero-eyebrow span { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.8)} }
+
+  .hero h1 {
+    font-size: clamp(3rem, 7vw, 5.5rem);
+    background: linear-gradient(135deg, #fff 30%, var(--gold) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 20px;
+  }
+  .hero-sub {
+    font-size: clamp(1rem, 2vw, 1.2rem);
+    color: var(--muted);
+    max-width: 560px;
+    margin: 0 auto 44px;
+    line-height: 1.7;
+  }
+  .hero-actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .btn-primary {
+    background: var(--gold);
+    color: var(--surface);
+    padding: 13px 30px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: .95rem;
+    transition: background .2s, transform .15s, box-shadow .2s;
+    box-shadow: 0 0 30px rgba(201,168,76,.25);
+  }
+  .btn-primary:hover { background: var(--gold2); color: var(--surface); transform: translateY(-2px); box-shadow: 0 0 40px rgba(201,168,76,.4); }
+  .btn-secondary {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 13px 30px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: .95rem;
+    transition: border-color .2s, background .2s, transform .15s;
+  }
+  .btn-secondary:hover { border-color: var(--gold); color: var(--gold); background: rgba(201,168,76,.05); transform: translateY(-2px); }
+
+  /* ── STATS ── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    margin-top: 72px;
+  }
+  .stat-item {
+    background: var(--card);
+    padding: 32px 28px;
+    text-align: center;
+  }
+  .stat-item .num {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: var(--gold);
+    display: block;
+    letter-spacing: -.04em;
+  }
+  .stat-item .label { font-size: .82rem; color: var(--muted); margin-top: 4px; }
+
+  /* ── SECTION HEADER ── */
+  .section-header { text-align: center; margin-bottom: 56px; }
+  .section-header .tag {
+    display: inline-block;
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 14px;
+  }
+  .section-header h2 { font-size: clamp(1.8rem, 4vw, 2.8rem); margin-bottom: 14px; }
+  .section-header p { color: var(--muted); font-size: 1rem; max-width: 520px; margin: 0 auto; }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px;
+    transition: border-color .2s, transform .2s;
+  }
+  .card:hover { border-color: rgba(201,168,76,.3); transform: translateY(-3px); }
+
+  /* ── AGENT PIPELINE ── */
+  .pipeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: relative;
+  }
+  .pipeline::before {
+    content: '';
+    position: absolute;
+    left: 24px; top: 40px; bottom: 40px;
+    width: 1px;
+    background: linear-gradient(to bottom, transparent, var(--gold), var(--gold), transparent);
+    opacity: .3;
+  }
+  .pipeline-item {
+    display: flex;
+    gap: 20px;
+    padding: 20px 0;
+    position: relative;
+  }
+  .pipeline-num {
+    width: 48px; height: 48px;
+    min-width: 48px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--card);
+    display: flex; align-items: center; justify-content: center;
+    font-size: .8rem; font-weight: 800; color: var(--gold);
+    position: relative; z-index: 1;
+  }
+  .pipeline-content { padding-top: 4px; }
+  .pipeline-content h4 { font-size: 1rem; margin-bottom: 4px; }
+  .pipeline-content p { font-size: .875rem; color: var(--muted); line-height: 1.6; }
+
+  /* ── STRATEGIES GRID ── */
+  .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+  .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; }
+
+  .strat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+    transition: border-color .2s, transform .2s;
+  }
+  .strat-card:hover { border-color: rgba(201,168,76,.3); transform: translateY(-3px); }
+  .strat-icon {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    background: rgba(201,168,76,.12);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem;
+    margin-bottom: 14px;
+  }
+  .strat-card h4 { font-size: .95rem; margin-bottom: 6px; }
+  .strat-card p { font-size: .82rem; color: var(--muted); line-height: 1.6; }
+  .strat-card .badge {
+    display: inline-block;
+    margin-top: 12px;
+    padding: 3px 10px;
+    border-radius: 100px;
+    font-size: .7rem;
+    font-weight: 600;
+    letter-spacing: .06em;
+  }
+  .badge-trend  { background: rgba(96,165,250,.15);  color: var(--info); }
+  .badge-mom    { background: rgba(201,168,76,.15);  color: var(--gold); }
+  .badge-mean   { background: rgba(74,222,128,.15);  color: var(--success); }
+  .badge-vol    { background: rgba(248,113,113,.15); color: var(--danger); }
+  .badge-rot    { background: rgba(167,139,250,.15); color: #a78bfa; }
+
+  /* ── TECH STACK ── */
+  .stack-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 14px;
+  }
+  .stack-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 16px;
+    text-align: center;
+    font-size: .82rem;
+    color: var(--muted);
+    transition: border-color .2s;
+  }
+  .stack-item:hover { border-color: var(--dim); color: var(--text); }
+  .stack-item .tech-name { display: block; font-weight: 700; color: var(--text); font-size: .9rem; margin-bottom: 3px; }
+
+  /* ── TERMINAL MOCKUP ── */
+  .terminal-wrap {
+    background: #050508;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+    font-size: .82rem;
+    max-width: 720px;
+    margin: 0 auto;
+    box-shadow: 0 40px 80px rgba(0,0,0,.6);
+  }
+  .terminal-bar {
+    background: #0b0d1a;
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .dot-r { background: #f87171; }
+  .dot-y { background: #facc15; }
+  .dot-g { background: #4ade80; }
+  .terminal-title { margin-left: 8px; color: var(--dim); font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; font-family: inherit; }
+  .terminal-body { padding: 24px; line-height: 1.9; }
+  .t-gold   { color: var(--gold); }
+  .t-green  { color: #4ade80; }
+  .t-muted  { color: var(--muted); }
+  .t-dim    { color: var(--dim); }
+  .t-blue   { color: #60a5fa; }
+  .t-red    { color: #f87171; }
+  .t-white  { color: var(--text); }
+  .t-prompt { color: var(--gold); }
+
+  /* ── SAFETY CARDS ── */
+  .safety-item {
+    display: flex; gap: 16px; align-items: flex-start;
+    padding: 20px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .safety-item:last-child { border-bottom: none; }
+  .safety-icon {
+    min-width: 38px; height: 38px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem;
+  }
+  .safety-icon.green { background: rgba(74,222,128,.12); }
+  .safety-icon.gold  { background: rgba(201,168,76,.12); }
+  .safety-icon.blue  { background: rgba(96,165,250,.12); }
+  .safety-icon.red   { background: rgba(248,113,113,.12); }
+  .safety-content h4 { font-size: .9rem; margin-bottom: 3px; }
+  .safety-content p  { font-size: .82rem; color: var(--muted); line-height: 1.6; }
+
+  /* ── ENV VARS ── */
+  .env-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .84rem;
+  }
+  .env-table th {
+    text-align: left;
+    padding: 12px 16px;
+    color: var(--muted);
+    font-size: .72rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+  }
+  .env-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(26,31,53,.6);
+    vertical-align: top;
+  }
+  .env-table tr:last-child td { border-bottom: none; }
+  .env-table code {
+    background: rgba(201,168,76,.08);
+    color: var(--gold);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: .8rem;
+    font-family: 'Fira Code', monospace;
+    white-space: nowrap;
+  }
+  .env-req { color: #f87171; font-size: .7rem; font-weight: 700; letter-spacing: .06em; }
+  .env-opt { color: var(--dim); font-size: .7rem; font-weight: 700; letter-spacing: .06em; }
+
+  /* ── DEPLOY STEPS ── */
+  .step-list { list-style: none; counter-reset: steps; display: flex; flex-direction: column; gap: 0; }
+  .step-list li {
+    counter-increment: steps;
+    display: flex; gap: 20px; align-items: flex-start;
+    padding: 20px 0; border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+  .step-list li:last-child { border-bottom: none; }
+  .step-list li::before {
+    content: counter(steps);
+    min-width: 32px; height: 32px;
+    background: rgba(201,168,76,.15);
+    border: 1px solid rgba(201,168,76,.3);
+    color: var(--gold);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .78rem; font-weight: 800;
+    flex-shrink: 0;
+  }
+  .step-list li h4 { font-size: .9rem; margin-bottom: 4px; }
+  .step-list li p { font-size: .82rem; color: var(--muted); line-height: 1.6; }
+
+  /* ── CODE BLOCK ── */
+  .code-block {
+    background: #050508;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 22px;
+    font-family: 'Fira Code', 'Cascadia Code', monospace;
+    font-size: .8rem;
+    color: var(--muted);
+    line-height: 1.8;
+    overflow-x: auto;
+  }
+  .code-block .cmd { color: var(--gold); }
+  .code-block .comment { color: var(--dim); }
+
+  /* ── FEATURE BADGES ── */
+  .feature-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(26,31,53,.8);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 5px 12px;
+    border-radius: 100px;
+    font-size: .75rem;
+  }
+  .feature-pill span { width: 5px; height: 5px; border-radius: 50%; background: var(--success); }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 48px 0;
+    text-align: center;
+    color: var(--dim);
+    font-size: .82rem;
+  }
+  footer .footer-logo { font-size: 1.3rem; font-weight: 800; color: var(--text); margin-bottom: 10px; }
+  footer .footer-logo span { color: var(--gold); }
+
+  /* ── GLOW LINE ── */
+  .glow-line {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    margin: 0 auto;
+    max-width: 300px;
+    opacity: .4;
+    margin-bottom: 64px;
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 640px) {
+    .nav-links { display: none; }
+    .hero { padding: 120px 0 64px; }
+    .pipeline::before { display: none; }
+    .section { padding: 64px 0; }
+  }
+
+  /* ── FADE IN ANIMATION ── */
+  .fade-in { opacity: 0; transform: translateY(24px); transition: opacity .6s ease, transform .6s ease; }
+  .fade-in.visible { opacity: 1; transform: none; }
+</style>
+</head>
+<body>
+
+<!-- ── NAV ─────────────────────────────────────────────────────────────────── -->
+<nav>
+  <div class="nav-inner">
+    <div class="nav-logo">
+      <div class="nav-logo-mark">SF</div>
+      Sfomo
+    </div>
+    <div class="nav-links">
+      <a href="#agents">Agents</a>
+      <a href="#strategies">Strategies</a>
+      <a href="#safety">Safety</a>
+      <a href="#deploy">Deploy</a>
+    </div>
+    <a href="https://github.com/bigxero01/sfomo" class="nav-cta">GitHub →</a>
+  </div>
+</nav>
+
+<!-- ── HERO ─────────────────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-eyebrow"><span></span> Open Source · Paper Trading by Default</div>
+    <h1>AI Agent<br>Trading Bot</h1>
+    <p class="hero-sub">
+      Institutional-style crypto asset management via a 6-agent LangGraph pipeline.
+      Compounds capital through disciplined risk management — not gambling.
+    </p>
+    <div class="hero-actions">
+      <a href="https://github.com/bigxero01/sfomo" class="btn-primary">View on GitHub</a>
+      <a href="#deploy" class="btn-secondary">Deploy to Railway</a>
+    </div>
+
+    <div class="stats-row fade-in" style="transition-delay:.1s">
+      <div class="stat-item">
+        <span class="num">6</span>
+        <div class="label">AI Agents in pipeline</div>
+      </div>
+      <div class="stat-item">
+        <span class="num">5</span>
+        <div class="label">Trading strategies</div>
+      </div>
+      <div class="stat-item">
+        <span class="num">0.5%</span>
+        <div class="label">Max risk per trade</div>
+      </div>
+      <div class="stat-item">
+        <span class="num">15%</span>
+        <div class="label">Drawdown kill switch</div>
+      </div>
+      <div class="stat-item">
+        <span class="num">1.5×</span>
+        <div class="label">Min R:R ratio</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── TERMINAL MOCKUP ────────────────────────────────────────────────────── -->
+<section class="section-sm">
+  <div class="container">
+    <div class="terminal-wrap fade-in">
+      <div class="terminal-bar">
+        <span class="dot dot-r"></span>
+        <span class="dot dot-y"></span>
+        <span class="dot dot-g"></span>
+        <span class="terminal-title">Sfomo Terminal</span>
+      </div>
+      <div class="terminal-body">
+        <div class="t-gold">  ███████╗███████╗ ██████╗ ███╗   ███╗ ██████╗</div>
+        <div class="t-gold">  ██╔════╝██╔════╝██╔═══██╗████╗ ████║██╔═══██╗</div>
+        <div class="t-gold">  ███████╗█████╗  ██║   ██║██╔████╔██║██║   ██║</div>
+        <div class="t-gold">  ╚════██║██╔══╝  ██║   ██║██║╚██╔╝██║██║   ██║</div>
+        <div class="t-gold">  ███████║██║     ╚██████╔╝██║ ╚═╝ ██║╚██████╔╝</div>
+        <div class="t-gold">  ╚══════╝╚═╝      ╚═════╝ ╚═╝     ╚═╝ ╚═════╝</div>
+        <div>&nbsp;</div>
+        <div class="t-muted">  Sfomo  ·  AI Agent Trading System  ·  Production Terminal</div>
+        <div class="t-dim">  Type  help  to list all commands</div>
+        <div>&nbsp;</div>
+        <div><span class="t-prompt">sfomo&gt;</span> <span class="t-white">cycle BTC/USDT ETH/USDT 1h</span></div>
+        <div>&nbsp;</div>
+        <div class="t-muted">  ─── Cycle a3f9c2b1 ─────────────────────────────</div>
+        <div class="t-muted">  Symbols    BTC/USDT, ETH/USDT</div>
+        <div class="t-muted">  Timeframe  1h</div>
+        <div>&nbsp;</div>
+        <div class="t-green">  [██░····] Market Intelligence       +2.1s</div>
+        <div class="t-blue">         Regime: bull_trend</div>
+        <div class="t-green">  [███░···] Strategy                  +5.8s</div>
+        <div class="t-blue">         Signals: 7 raw → 2 filtered</div>
+        <div class="t-green">  [████░··] Risk Management           +6.3s</div>
+        <div class="t-blue">         Positions: 2 approved, 0 rejected</div>
+        <div class="t-green">  [█████░·] Execution                 +7.1s</div>
+        <div class="t-green">         → BUY   BTC/USDT 0.0124 @ $67,420.00</div>
+        <div class="t-green">         → BUY   ETH/USDT 0.2841 @ $3,512.50</div>
+        <div class="t-green">  [███████] Learning                  +9.4s</div>
+        <div>&nbsp;</div>
+        <div class="t-green">  Cycle complete in 9.4s</div>
+        <div>&nbsp;</div>
+        <div><span class="t-prompt">sfomo&gt;</span> <span style="width:7px;height:14px;background:var(--gold);display:inline-block;opacity:.8;animation:pulse 1.1s step-end infinite;vertical-align:text-bottom;"></span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── AGENTS ─────────────────────────────────────────────────────────────── -->
+<section class="section" id="agents">
+  <div class="container">
+    <div class="section-header fade-in">
+      <div class="tag">Pipeline</div>
+      <h2>6 AI Agents, Running in Sequence</h2>
+      <p>Each cycle runs all six agents in a deterministic LangGraph pipeline. GPT-4o reasons at the strategy and learning layers.</p>
+    </div>
+
+    <div class="grid-2 fade-in">
+      <div>
+        <div class="pipeline">
+          <div class="pipeline-item">
+            <div class="pipeline-num">1</div>
+            <div class="pipeline-content">
+              <h4>Market Intelligence</h4>
+              <p>Fetches OHLCV candles, order books, funding rates, sentiment scores, and on-chain metrics. LLM classifies the current market regime.</p>
+            </div>
+          </div>
+          <div class="pipeline-item">
+            <div class="pipeline-num">2</div>
+            <div class="pipeline-content">
+              <h4>Strategy</h4>
+              <p>Runs all 5 strategies in parallel, applies regime-based weight adjustments, then LLM filters to high-conviction signals only. Reasoning field excluded from filter prompt to prevent injection.</p>
+            </div>
+          </div>
+          <div class="pipeline-item">
+            <div class="pipeline-num">3</div>
+            <div class="pipeline-content">
+              <h4>Risk Management</h4>
+              <p>Fixed-fractional position sizing by confidence, VaR check, drawdown guard, kill switch verification. Fails closed on Redis errors.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="pipeline">
+          <div class="pipeline-item">
+            <div class="pipeline-num">4</div>
+            <div class="pipeline-content">
+              <h4>Execution</h4>
+              <p>Live balance check → TWAP for large orders (with kill switch re-check between slices and random interval jitter) → market order for small. UUID clientOrderId on every order. Liquidity check blocks if insufficient depth.</p>
+            </div>
+          </div>
+          <div class="pipeline-item">
+            <div class="pipeline-num">5</div>
+            <div class="pipeline-content">
+              <h4>Portfolio Manager</h4>
+              <p>Updates equity snapshot, persists peak for drawdown calculation, compounding reinvestment using cycle-delta PnL (not cumulative), rebalance detection.</p>
+            </div>
+          </div>
+          <div class="pipeline-item">
+            <div class="pipeline-num">6</div>
+            <div class="pipeline-content">
+              <h4>Learning</h4>
+              <p>LLM evaluates the completed cycle, adjusts strategy weights (±5% cap per cycle), records regime history, stores cycle summary in Qdrant vector DB for future reference.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── STRATEGIES ─────────────────────────────────────────────────────────── -->
+<section class="section" id="strategies" style="background: linear-gradient(180deg, transparent, rgba(11,13,26,.5), transparent);">
+  <div class="container">
+    <div class="section-header fade-in">
+      <div class="tag">Strategies</div>
+      <h2>5 Battle-Tested Approaches</h2>
+      <p>Weights are dynamically adjusted per market regime. The Learning agent fine-tunes them each cycle based on performance.</p>
+    </div>
+
+    <div class="grid-3 fade-in">
+      <div class="strat-card">
+        <div class="strat-icon">📈</div>
+        <h4>Trend Following</h4>
+        <p>EMA crossover with RSI filter. Captures sustained directional moves in bull and bear markets. Default weight 30%.</p>
+        <span class="badge badge-trend">30% base weight</span>
+      </div>
+      <div class="strat-card">
+        <div class="strat-icon">🚀</div>
+        <h4>Momentum Breakout</h4>
+        <p>Donchian channel breakouts confirmed by volume surge. Targets explosive moves at structural highs/lows. Default weight 25%.</p>
+        <span class="badge badge-mom">25% base weight</span>
+      </div>
+      <div class="strat-card">
+        <div class="strat-icon">↩</div>
+        <h4>Mean Reversion</h4>
+        <p>Bollinger Bands (sample std) + RSI extremes. Buys oversold, sells overbought in ranging conditions. Default weight 20%.</p>
+        <span class="badge badge-mean">20% base weight</span>
+      </div>
+      <div class="strat-card">
+        <div class="strat-icon">⚡</div>
+        <h4>Volatility Arb</h4>
+        <p>Fades funding rate extremes on perpetuals. Profits from mean-reversion of funding after extreme positive/negative readings. Default weight 15%.</p>
+        <span class="badge badge-vol">15% base weight</span>
+      </div>
+      <div class="strat-card">
+        <div class="strat-icon">🔄</div>
+        <h4>Portfolio Rotation</h4>
+        <p>Risk-adjusted momentum ranking across all trading pairs. Rotates capital toward the strongest performers. Default weight 10%.</p>
+        <span class="badge badge-rot">10% base weight</span>
+      </div>
+      <div class="strat-card" style="background: rgba(201,168,76,.04); border-color: rgba(201,168,76,.15);">
+        <div class="strat-icon" style="background: rgba(201,168,76,.15);">🧠</div>
+        <h4>Regime Adaptation</h4>
+        <p>Weights are multiplied by regime-specific adjustments each cycle. Bull trend boosts trend/momentum; ranging boosts mean reversion. Learning agent further refines.</p>
+        <span class="badge badge-mom">Dynamic</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── SAFETY ─────────────────────────────────────────────────────────────── -->
+<section class="section" id="safety">
+  <div class="container">
+    <div class="section-header fade-in">
+      <div class="tag">Risk Management</div>
+      <h2>Safety First, Always</h2>
+      <p>Multiple independent layers of protection. Paper trading by default. Every decision is logged.</p>
+    </div>
+
+    <div class="grid-2 fade-in">
+      <div class="card">
+        <h3 style="margin-bottom:4px;font-size:1.1rem">Position-Level Controls</h3>
+        <p style="font-size:.82rem;color:var(--muted);margin-bottom:20px">Applied before every order is sent</p>
+        <div class="safety-item">
+          <div class="safety-icon gold">🛡</div>
+          <div class="safety-content">
+            <h4>Fixed-Fractional Sizing</h4>
+            <p>Risk per trade = equity × risk_pct × confidence. Maximum 0.5% equity at risk. Position capped at 20% of equity regardless.</p>
+          </div>
+        </div>
+        <div class="safety-item">
+          <div class="safety-icon blue">📊</div>
+          <div class="safety-content">
+            <h4>Minimum Stop Distance Guard</h4>
+            <p>Stop loss must be at least 0.01% from entry. Prevents epsilon-tiny stops from inflating position sizes via IEEE-754 arithmetic.</p>
+          </div>
+        </div>
+        <div class="safety-item">
+          <div class="safety-icon green">✓</div>
+          <div class="safety-content">
+            <h4>Live Balance Check</h4>
+            <p>Queries exchange balance before every order. Skips the order if available free balance is insufficient, even in concurrent scenarios.</p>
+          </div>
+        </div>
+        <div class="safety-item">
+          <div class="safety-icon gold">⚖</div>
+          <div class="safety-content">
+            <h4>Minimum 1.5× R:R Ratio</h4>
+            <p>Every signal validated for risk/reward before approval. Signals with R:R below 1.5 are rejected regardless of confidence.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-bottom:4px;font-size:1.1rem">Portfolio-Level Controls</h3>
+        <p style="font-size:.82rem;color:var(--muted);margin-bottom:20px">Applied every cycle, persisted in Redis</p>
+        <div class="safety-item">
+          <div class="safety-icon red">🔴</div>
+          <div class="safety-content">
+            <h4>Kill Switch (Redis-Persistent)</h4>
+            <p>Triggers at configured max drawdown (default 15%). Survives restarts and is shared across all workers. Requires ADMIN_KEY to reset — separate from API_KEY.</p>
+          </div>
+        </div>
+        <div class="safety-item">
+          <div class="safety-icon blue">🔒</div>
+          <div class="safety-content">
+            <h4>Global Cycle Mutex</h4>
+            <p>asyncio.Semaphore(1) prevents concurrent cycles from racing on portfolio state, exchange balances, and kill switch transitions.</p>
+          </div>
+        </div>
+        <div class="safety-item">
+          <div class="safety-icon gold">📋</div>
+          <div class="safety-content">
+            <h4>Append-Only Audit Log</h4>
+            <p>audit_logs table has REVOKE UPDATE, DELETE enforced at the database level. Every order fill and failure is permanently recorded.</p>
+          </div>
+        </div>
+        <div class="safety-item">
+          <div class="safety-icon green">📄</div>
+          <div class="safety-content">
+            <h4>Fail-Closed on Redis Errors</h4>
+            <p>If Redis is unreachable, the cycle halts with skip_execution=True. Never trades when the kill switch state is unknown.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── STACK ──────────────────────────────────────────────────────────────── -->
+<section class="section-sm" style="background: linear-gradient(180deg, transparent, rgba(11,13,26,.4), transparent);">
+  <div class="container">
+    <div class="section-header fade-in">
+      <div class="tag">Stack</div>
+      <h2>Production-Grade Infrastructure</h2>
+    </div>
+    <div class="stack-grid fade-in">
+      <div class="stack-item"><span class="tech-name">FastAPI</span>Async Python backend</div>
+      <div class="stack-item"><span class="tech-name">LangGraph</span>Agent orchestration</div>
+      <div class="stack-item"><span class="tech-name">GPT-4o</span>AI reasoning layer</div>
+      <div class="stack-item"><span class="tech-name">CCXT</span>Exchange connectivity</div>
+      <div class="stack-item"><span class="tech-name">PostgreSQL</span>Trade & portfolio history</div>
+      <div class="stack-item"><span class="tech-name">TimescaleDB</span>Time-series hypertables</div>
+      <div class="stack-item"><span class="tech-name">Redis</span>Kill switch · Rate limiting</div>
+      <div class="stack-item"><span class="tech-name">Qdrant</span>Vector memory store</div>
+      <div class="stack-item"><span class="tech-name">Next.js 15</span>React dashboard</div>
+      <div class="stack-item"><span class="tech-name">Tailwind</span>UI styling</div>
+      <div class="stack-item"><span class="tech-name">Recharts</span>Equity curve charts</div>
+      <div class="stack-item"><span class="tech-name">Railway</span>Cloud deployment</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── DEPLOY ─────────────────────────────────────────────────────────────── -->
+<section class="section" id="deploy">
+  <div class="container">
+    <div class="section-header fade-in">
+      <div class="tag">Deployment</div>
+      <h2>Live in Minutes on Railway</h2>
+      <p>Monorepo with two services — backend (Python) and frontend (Node). Each needs its own root directory configured.</p>
+    </div>
+
+    <div class="grid-2 fade-in">
+      <div>
+        <h3 style="font-size:1.1rem;margin-bottom:20px;color:var(--muted);font-weight:500">Setup Steps</h3>
+        <ol class="step-list">
+          <li>
+            <div>
+              <h4>Create Railway project</h4>
+              <p>New project → Deploy from GitHub → select this repo</p>
+            </div>
+          </li>
+          <li>
+            <div>
+              <h4>Add Backend service</h4>
+              <p>Settings → <strong style="color:var(--gold)">Root Directory → backend</strong> → add PostgreSQL and Redis plugins</p>
+            </div>
+          </li>
+          <li>
+            <div>
+              <h4>Add Frontend service</h4>
+              <p>Same repo → Settings → <strong style="color:var(--gold)">Root Directory → frontend</strong></p>
+            </div>
+          </li>
+          <li>
+            <div>
+              <h4>Set environment variables</h4>
+              <p>Backend: SECRET_KEY, API_KEY, ADMIN_KEY, OPENAI_API_KEY, exchange credentials, CORS_ORIGINS</p>
+            </div>
+          </li>
+          <li>
+            <div>
+              <h4>Generate secure keys</h4>
+              <p>All three keys must be unique and at least 32 characters</p>
+            </div>
+          </li>
+          <li>
+            <div>
+              <h4>Deploy &amp; open dashboard</h4>
+              <p>Railway builds both Dockerfiles automatically. Frontend URL opens the trading dashboard.</p>
+            </div>
+          </li>
+        </ol>
+      </div>
+
+      <div>
+        <h3 style="font-size:1.1rem;margin-bottom:20px;color:var(--muted);font-weight:500">Generate Keys</h3>
+        <div class="code-block" style="margin-bottom:20px">
+          <span class="comment"># Generate all three keys independently</span><br>
+          <span class="cmd">python -c "import secrets; print(secrets.token_hex(32))"</span><br>
+          <span class="comment"># Run three times → SECRET_KEY, API_KEY, ADMIN_KEY</span>
+        </div>
+
+        <h3 style="font-size:1.1rem;margin-bottom:16px;margin-top:28px;color:var(--muted);font-weight:500">Required Variables</h3>
+        <table class="env-table">
+          <thead>
+            <tr>
+              <th>Variable</th>
+              <th>Service</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><code>SECRET_KEY</code></td><td>Backend</td><td><span class="env-req">REQ</span></td></tr>
+            <tr><td><code>API_KEY</code></td><td>Both</td><td><span class="env-req">REQ</span></td></tr>
+            <tr><td><code>ADMIN_KEY</code></td><td>Backend</td><td><span class="env-req">REQ</span></td></tr>
+            <tr><td><code>OPENAI_API_KEY</code></td><td>Backend</td><td><span class="env-req">REQ</span></td></tr>
+            <tr><td><code>EXCHANGE_API_KEY</code></td><td>Backend</td><td><span class="env-req">REQ</span></td></tr>
+            <tr><td><code>CORS_ORIGINS</code></td><td>Backend</td><td><span class="env-req">REQ</span></td></tr>
+            <tr><td><code>NEXT_PUBLIC_WS_URL</code></td><td>Frontend</td><td><span class="env-req">REQ</span></td></tr>
+            <tr><td><code>EXCHANGE_SANDBOX</code></td><td>Backend</td><td><span class="env-opt">OPT</span></td></tr>
+            <tr><td><code>INITIAL_CAPITAL</code></td><td>Backend</td><td><span class="env-opt">OPT</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── DASHBOARD FEATURES ─────────────────────────────────────────────────── -->
+<section class="section-sm" style="background: linear-gradient(180deg, transparent, rgba(11,13,26,.5), transparent);">
+  <div class="container">
+    <div class="section-header fade-in">
+      <div class="tag">Dashboard</div>
+      <h2>Three Views, Complete Control</h2>
+    </div>
+    <div class="grid-3 fade-in">
+      <div class="card">
+        <div style="font-size:1.8rem;margin-bottom:14px">📊</div>
+        <h4>Dashboard</h4>
+        <p style="color:var(--muted);font-size:.85rem;margin-top:8px;line-height:1.7">
+          Live equity curve, realized and unrealized P&amp;L, drawdown gauge, agent status, signal list, recent trades. Auto-refreshes every 30s.
+        </p>
+      </div>
+      <div class="card">
+        <div style="font-size:1.8rem;margin-bottom:14px">💰</div>
+        <h4>Funds</h4>
+        <p style="color:var(--muted);font-size:.85rem;margin-top:8px;line-height:1.7">
+          Exchange balances, on-chain deposit addresses, withdrawal form with 2-step confirmation, full deposit/withdrawal history with status badges.
+        </p>
+      </div>
+      <div class="card">
+        <div style="font-size:1.8rem;margin-bottom:14px">⌨️</div>
+        <h4>Terminal</h4>
+        <p style="color:var(--muted);font-size:.85rem;margin-top:8px;line-height:1.7">
+          Full production terminal with live cycle streaming, command history, Ctrl+L clear. Run cycles, check status, manage scheduler, view signals in real time.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA ───────────────────────────────────────────────────────────────── -->
+<section class="section">
+  <div class="container" style="text-align:center">
+    <div class="glow-line"></div>
+    <div class="fade-in">
+      <div class="hero-eyebrow" style="display:inline-flex;margin-bottom:24px"><span></span> EXCHANGE_SANDBOX=true by default</div>
+      <h2 style="font-size:clamp(2rem,5vw,3.5rem);margin-bottom:16px">Start paper trading today</h2>
+      <p style="color:var(--muted);max-width:480px;margin:0 auto 36px;font-size:1rem;line-height:1.7">
+        No real funds at risk until you're ready. Set EXCHANGE_SANDBOX=false and provide live credentials when you want to go live.
+      </p>
+      <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:36px">
+        <a href="https://github.com/bigxero01/sfomo" class="btn-primary">Get the Code</a>
+        <a href="https://railway.app" class="btn-secondary">Deploy on Railway</a>
+      </div>
+      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+        <span class="feature-pill"><span></span> Paper trading by default</span>
+        <span class="feature-pill"><span></span> Open source, self-hosted</span>
+        <span class="feature-pill"><span></span> Kill switch at 15% drawdown</span>
+        <span class="feature-pill"><span></span> 32-finding security hardened</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FOOTER ─────────────────────────────────────────────────────────────── -->
+<footer>
+  <div class="container">
+    <div class="footer-logo"><span>S</span>fomo</div>
+    <p style="margin-bottom:8px">AI Agent Trading Bot · Open Source</p>
+    <p style="color:var(--dim);font-size:.75rem">
+      Not financial advice. Use paper trading until you understand the risks.
+      Always keep EXCHANGE_SANDBOX=true during testing.
+    </p>
+  </div>
+</footer>
+
+<script>
+  // Intersection Observer for fade-in animations
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); }
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+  document.querySelectorAll('.fade-in').forEach(el => io.observe(el));
+
+  // Stagger child elements in grids
+  document.querySelectorAll('.grid-3, .grid-2, .grid-4, .stats-row').forEach(grid => {
+    [...grid.children].forEach((child, i) => {
+      if (!child.classList.contains('fade-in')) {
+        child.style.opacity = '0';
+        child.style.transform = 'translateY(20px)';
+        child.style.transition = `opacity .5s ease ${i * .08}s, transform .5s ease ${i * .08}s`;
+        const obs = new IntersectionObserver(([e]) => {
+          if (e.isIntersecting) {
+            child.style.opacity = '1';
+            child.style.transform = 'none';
+            obs.unobserve(child);
+          }
+        }, { threshold: 0.1 });
+        obs.observe(child);
+      }
+    });
+  });
+</script>
+</body>
+</html>
