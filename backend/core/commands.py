@@ -92,6 +92,11 @@ COMMANDS_HELP = [
     ("backtest [SYM] [DAYS]",     "Run strategy backtest on historical data"),
     ("agents",                    "Show last cycle agent pipeline log"),
     ("logs [N]",                  "Tail last N agent messages (default 50)"),
+    ("balances",                  "Show exchange coin balances"),
+    ("deposit <CURRENCY> [NET]",  "Get on-chain deposit address"),
+    ("withdraw <C> <AMT> <ADDR> [NET] [--confirm]", "Submit a withdrawal"),
+    ("deposits [CURRENCY] [N]",   "Deposit history (default 20)"),
+    ("withdrawals [CURRENCY] [N]","Withdrawal history (default 20)"),
     ("ping",                      "Latency + connectivity check"),
     ("version",                   "Version and build info"),
     ("clear",                     "Clear the terminal"),
@@ -751,6 +756,281 @@ async def cmd_logs(args: List[str]) -> AsyncIterator[Line]:
     yield _line("", "normal")
 
 
+# ── balances ──────────────────────────────────────────────────────────────────
+
+async def cmd_balances(_args: List[str]) -> AsyncIterator[Line]:
+    from services.exchange import ExchangeService
+
+    yield _line("", "normal")
+    yield _line("  ─── Exchange Balances ───────────────────────", "muted")
+    yield _line("", "normal")
+
+    exchange = ExchangeService()
+    try:
+        raw = await exchange.fetch_balance()
+    except Exception as exc:
+        yield _line(f"  Exchange error: {exc}", "error")
+        yield _line("", "normal")
+        await exchange.close()
+        return
+    finally:
+        await exchange.close()
+
+    total_map = raw.get("total", {})
+    free_map = raw.get("free", {})
+    used_map = raw.get("used", {})
+
+    coins = []
+    for currency, total in total_map.items():
+        if currency in ("info", "timestamp", "datetime"):
+            continue
+        if not isinstance(total, (int, float)) or total <= 0:
+            continue
+        coins.append((currency, float(free_map.get(currency) or 0), float(used_map.get(currency) or 0), float(total)))
+
+    if not coins:
+        yield _line("  No balances found.", "dim")
+        yield _line("", "normal")
+        return
+
+    coins.sort(key=lambda x: x[3], reverse=True)
+    yield _line(f"  {'Currency':<10}  {'Free':>18}  {'Locked':>18}  {'Total':>18}", "gold")
+    yield _line("  " + "─" * 70, "muted")
+    for currency, free, locked, total in coins:
+        yield _line(
+            f"  {currency:<10}  {free:>18,.8f}  {locked:>18,.8f}  {total:>18,.8f}",
+            "info",
+        )
+    yield _line("", "normal")
+
+
+# ── deposit ───────────────────────────────────────────────────────────────────
+
+async def cmd_deposit(args: List[str]) -> AsyncIterator[Line]:
+    from services.exchange import ExchangeService
+
+    if not args:
+        yield _line("  Usage: deposit <CURRENCY> [NETWORK]", "error")
+        yield _line("  e.g.   deposit USDT TRC20", "dim")
+        yield _line("", "normal")
+        return
+
+    currency = args[0].upper()
+    network = args[1] if len(args) > 1 else None
+
+    yield _line("", "normal")
+    yield _line(f"  Fetching {currency} deposit address{f' ({network})' if network else ''}…", "info")
+
+    exchange = ExchangeService()
+    try:
+        result = await exchange.fetch_deposit_address(currency, network)
+    except Exception as exc:
+        yield _line(f"  Exchange error: {exc}", "error")
+        yield _line("", "normal")
+        await exchange.close()
+        return
+    finally:
+        await exchange.close()
+
+    address = result.get("address", "")
+    tag = result.get("tag")
+    net = result.get("network") or network or ""
+
+    yield _line("", "normal")
+    yield _line(f"  ─── {currency} Deposit Address ─────────────────", "muted")
+    yield _line(f"  Network   {net}", "info")
+    yield _line(f"  Address   {address}", "gold")
+    if tag:
+        yield _line(f"  Memo/Tag  {tag}", "warn")
+        yield _line("  ⚠ Memo/Tag is required for this currency", "warn")
+    yield _line("", "normal")
+    yield _line(f"  ⚠ Only send {currency} on {net or 'this'} network", "dim")
+    yield _line("", "normal")
+
+
+# ── withdraw ──────────────────────────────────────────────────────────────────
+
+async def cmd_withdraw(args: List[str]) -> AsyncIterator[Line]:
+    from services.exchange import ExchangeService
+    from services.database import DatabaseService
+
+    # Parse: withdraw <CURRENCY> <AMOUNT> <ADDRESS> [NETWORK] [--confirm]
+    confirm = "--confirm" in args
+    clean_args = [a for a in args if a != "--confirm"]
+
+    if len(clean_args) < 3:
+        yield _line("", "normal")
+        yield _line("  Usage: withdraw <CURRENCY> <AMOUNT> <ADDRESS> [NETWORK] [--confirm]", "error")
+        yield _line("  e.g.   withdraw USDT 100 TXyz... TRC20 --confirm", "dim")
+        yield _line("", "normal")
+        yield _line("  Omit --confirm to preview without executing.", "muted")
+        yield _line("", "normal")
+        return
+
+    currency = clean_args[0].upper()
+    try:
+        amount = float(clean_args[1])
+        if amount <= 0:
+            raise ValueError
+    except ValueError:
+        yield _line(f"  Invalid amount: {clean_args[1]}", "error")
+        yield _line("", "normal")
+        return
+
+    address = clean_args[2]
+    network = clean_args[3] if len(clean_args) > 3 else None
+
+    yield _line("", "normal")
+    yield _line("  ─── Withdrawal Preview ──────────────────────", "muted")
+    yield _line(f"  Currency  {currency}", "info")
+    yield _line(f"  Amount    {amount:,.8f}", "warn")
+    yield _line(f"  Address   {address[:20]}…{address[-8:] if len(address) > 28 else ''}", "gold")
+    if network:
+        yield _line(f"  Network   {network}", "info")
+    yield _line("", "normal")
+
+    if not confirm:
+        yield _line("  DRY RUN — not submitted.", "muted")
+        yield _line("  Add --confirm to execute: withdraw ... --confirm", "dim")
+        yield _line("", "normal")
+        return
+
+    yield _line("  Submitting withdrawal…", "warn")
+    exchange = ExchangeService()
+    db = DatabaseService()
+    try:
+        result = await exchange.withdraw(
+            currency=currency,
+            amount=amount,
+            address=address,
+            network=network,
+        )
+        wid = str(result.get("id", ""))
+        await db.record_audit_log(
+            action="withdrawal",
+            symbol=currency,
+            side="out",
+            size=amount,
+            order_id=wid,
+            status="submitted",
+            detail=f"addr={address[:20]} net={network}",
+            cycle_id="",
+        )
+        yield _line(f"  ✓ Submitted — ID: {wid or 'pending'}", "success")
+    except Exception as exc:
+        yield _line(f"  ✗ Failed: {exc}", "error")
+        await db.record_audit_log(
+            action="withdrawal_failed",
+            symbol=currency,
+            side="out",
+            size=amount,
+            status="failed",
+            detail=str(exc)[:200],
+            cycle_id="",
+        )
+    finally:
+        await exchange.close()
+
+    yield _line("", "normal")
+
+
+# ── deposits history ──────────────────────────────────────────────────────────
+
+async def cmd_deposits(args: List[str]) -> AsyncIterator[Line]:
+    from services.exchange import ExchangeService
+
+    currency: Optional[str] = None
+    limit = 20
+    for arg in args:
+        if arg.isdigit():
+            limit = min(100, max(1, int(arg)))
+        elif arg.isalpha():
+            currency = arg.upper()
+
+    yield _line("", "normal")
+    yield _line(f"  ─── Deposit History{f' ({currency})' if currency else ''} ──────────────────", "muted")
+    yield _line("", "normal")
+
+    exchange = ExchangeService()
+    try:
+        txs = await exchange.fetch_deposits(currency, limit)
+    except Exception as exc:
+        yield _line(f"  Exchange error: {exc}", "error")
+        yield _line("", "normal")
+        await exchange.close()
+        return
+    finally:
+        await exchange.close()
+
+    if not txs:
+        yield _line("  No deposits found.", "dim")
+        yield _line("", "normal")
+        return
+
+    yield _line(f"  {'Time':<20}  {'Currency':<8}  {'Amount':>14}  {'Status':<12}  TxID", "gold")
+    yield _line("  " + "─" * 80, "muted")
+    for tx in txs:
+        ts = str(tx.get("datetime") or tx.get("timestamp") or "")[:16]
+        amt = float(tx.get("amount") or 0)
+        txid = str(tx.get("txid") or "")[:14]
+        status = str(tx.get("status") or "")
+        ccy = str(tx.get("currency") or "")
+        yield _line(
+            f"  {ts:<20}  {ccy:<8}  {amt:>14,.8f}  {status:<12}  {txid}",
+            "success" if status == "ok" else "muted",
+        )
+    yield _line("", "normal")
+
+
+# ── withdrawals history ───────────────────────────────────────────────────────
+
+async def cmd_withdrawals(args: List[str]) -> AsyncIterator[Line]:
+    from services.exchange import ExchangeService
+
+    currency: Optional[str] = None
+    limit = 20
+    for arg in args:
+        if arg.isdigit():
+            limit = min(100, max(1, int(arg)))
+        elif arg.isalpha():
+            currency = arg.upper()
+
+    yield _line("", "normal")
+    yield _line(f"  ─── Withdrawal History{f' ({currency})' if currency else ''} ─────────────────", "muted")
+    yield _line("", "normal")
+
+    exchange = ExchangeService()
+    try:
+        txs = await exchange.fetch_withdrawals(currency, limit)
+    except Exception as exc:
+        yield _line(f"  Exchange error: {exc}", "error")
+        yield _line("", "normal")
+        await exchange.close()
+        return
+    finally:
+        await exchange.close()
+
+    if not txs:
+        yield _line("  No withdrawals found.", "dim")
+        yield _line("", "normal")
+        return
+
+    yield _line(f"  {'Time':<20}  {'Currency':<8}  {'Amount':>14}  {'Status':<12}  Address", "gold")
+    yield _line("  " + "─" * 80, "muted")
+    for tx in txs:
+        ts = str(tx.get("datetime") or tx.get("timestamp") or "")[:16]
+        amt = float(tx.get("amount") or 0)
+        addr = str(tx.get("address") or "")
+        addr_short = f"{addr[:10]}…{addr[-6:]}" if len(addr) > 16 else addr
+        status = str(tx.get("status") or "")
+        ccy = str(tx.get("currency") or "")
+        yield _line(
+            f"  {ts:<20}  {ccy:<8}  {amt:>14,.8f}  {status:<12}  {addr_short}",
+            "error" if status in ("failed", "canceled") else "muted",
+        )
+    yield _line("", "normal")
+
+
 # ── misc ──────────────────────────────────────────────────────────────────────
 
 async def cmd_ping(_args: List[str]) -> AsyncIterator[Line]:
@@ -797,23 +1077,28 @@ async def cmd_unknown(name: str) -> AsyncIterator[Line]:
 # ── Dispatch table ────────────────────────────────────────────────────────────
 
 _REGISTRY: Dict[str, Callable] = {
-    "help":       cmd_help,
-    "status":     cmd_status,
-    "cycle":      cmd_cycle,
-    "portfolio":  cmd_portfolio,
-    "signals":    cmd_signals,
-    "trades":     cmd_trades,
-    "weights":    cmd_weights,
-    "regime":     cmd_regime,
-    "scheduler":  cmd_scheduler,
-    "kill":       cmd_kill,
-    "reset-kill": cmd_reset_kill,
-    "backtest":   cmd_backtest,
-    "agents":     cmd_agents,
-    "logs":       cmd_logs,
-    "ping":       cmd_ping,
-    "version":    cmd_version,
-    "clear":      cmd_clear,
+    "help":        cmd_help,
+    "status":      cmd_status,
+    "cycle":       cmd_cycle,
+    "portfolio":   cmd_portfolio,
+    "signals":     cmd_signals,
+    "trades":      cmd_trades,
+    "weights":     cmd_weights,
+    "regime":      cmd_regime,
+    "scheduler":   cmd_scheduler,
+    "kill":        cmd_kill,
+    "reset-kill":  cmd_reset_kill,
+    "backtest":    cmd_backtest,
+    "agents":      cmd_agents,
+    "logs":        cmd_logs,
+    "balances":    cmd_balances,
+    "deposit":     cmd_deposit,
+    "withdraw":    cmd_withdraw,
+    "deposits":    cmd_deposits,
+    "withdrawals": cmd_withdrawals,
+    "ping":        cmd_ping,
+    "version":     cmd_version,
+    "clear":       cmd_clear,
 }
 
 

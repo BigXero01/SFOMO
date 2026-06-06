@@ -116,3 +116,49 @@ class ExchangeService:
 
     async def fetch_open_orders(self, symbol: Optional[str] = None) -> List[Dict[str, Any]]:
         return await self._exchange.fetch_open_orders(symbol)
+
+    # ── Deposits & Withdrawals ────────────────────────────────────────────
+
+    async def fetch_deposit_address(
+        self, currency: str, network: Optional[str] = None
+    ) -> Dict[str, Any]:
+        params: Dict[str, Any] = {}
+        if network:
+            params["network"] = network
+        return await self._exchange.fetch_deposit_address(currency, params)
+
+    async def fetch_deposits(
+        self, currency: Optional[str] = None, limit: int = 20
+    ) -> List[Dict[str, Any]]:
+        try:
+            if self._exchange.has.get("fetchDeposits"):
+                return await self._exchange.fetch_deposits(currency, limit=limit) or []
+        except Exception as exc:
+            logger.warning(f"[Exchange] fetch_deposits error: {exc}")
+        return []
+
+    async def withdraw(
+        self,
+        currency: str,
+        amount: float,
+        address: str,
+        tag: Optional[str] = None,
+        network: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        params: Dict[str, Any] = {}
+        if network:
+            params["network"] = network
+        logger.warning(
+            f"[Exchange] WITHDRAWAL {amount} {currency} → {address[:16]}... net={network}"
+        )
+        return await self._exchange.withdraw(currency, amount, address, tag, params)
+
+    async def fetch_withdrawals(
+        self, currency: Optional[str] = None, limit: int = 20
+    ) -> List[Dict[str, Any]]:
+        try:
+            if self._exchange.has.get("fetchWithdrawals"):
+                return await self._exchange.fetch_withdrawals(currency, limit=limit) or []
+        except Exception as exc:
+            logger.warning(f"[Exchange] fetch_withdrawals error: {exc}")
+        return []

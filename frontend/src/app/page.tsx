@@ -7,6 +7,7 @@ import { RiskMetrics } from "@/components/RiskMetrics";
 import { AgentStatus } from "@/components/AgentStatus";
 import { TradeHistory } from "@/components/TradeHistory";
 import { SignalList } from "@/components/SignalList";
+import { Funds } from "@/components/Funds";
 import { Terminal } from "@/components/Terminal";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -31,7 +32,7 @@ function StatCard({
   );
 }
 
-type Tab = "dashboard" | "terminal";
+type Tab = "dashboard" | "funds" | "terminal";
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
@@ -122,6 +123,16 @@ export default function Dashboard() {
               Dashboard
             </button>
             <button
+              onClick={() => setTab("funds")}
+              className={`px-3 py-1.5 rounded-md transition-colors ${
+                tab === "funds"
+                  ? "bg-[#1a1f35] text-[#e8eaf6]"
+                  : "text-[#7c85a2] hover:text-[#e8eaf6]"
+              }`}
+            >
+              Funds
+            </button>
+            <button
               onClick={() => setTab("terminal")}
               className={`px-3 py-1.5 rounded-md transition-colors font-mono ${
                 tab === "terminal"
@@ -204,6 +215,13 @@ export default function Dashboard() {
             <SignalList signals={cycle?.signals ?? []} />
             <TradeHistory trades={trades} />
           </div>
+        </main>
+      )}
+
+      {/* ── Funds tab ─────────────────────────────────────────────────────── */}
+      {tab === "funds" && (
+        <main className="px-6 py-6 max-w-screen-lg mx-auto">
+          <Funds />
         </main>
       )}
 
