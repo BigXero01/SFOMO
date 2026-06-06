@@ -1,5 +1,9 @@
-const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
+// All REST calls use relative paths so they route through the Next.js server-side
+// proxy (/src/app/api/[...path]/route.ts), which adds X-API-Key from the
+// server-only API_KEY env var — the key is never exposed in the client bundle.
+//
+// NEXT_PUBLIC_WS_URL and NEXT_PUBLIC_API_KEY are still needed for WebSocket
+// connections, which cannot be proxied by Next.js server-side routes.
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -91,25 +95,18 @@ export interface FundTransaction {
 
 // ── HTTP helpers ───────────────────────────────────────────────────────────────
 
-function _headers(): HeadersInit {
-  const h: HeadersInit = { "Content-Type": "application/json" };
-  if (API_KEY) (h as Record<string, string>)["X-API-Key"] = API_KEY;
-  return h;
-}
+const _JSON_HEADERS: HeadersInit = { "Content-Type": "application/json" };
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    cache: "no-store",
-    headers: _headers(),
-  });
+  const res = await fetch(path, { cache: "no-store" });
   if (!res.ok) throw new Error(`${res.status} ${path}`);
   return res.json();
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(path, {
     method: "POST",
-    headers: _headers(),
+    headers: _JSON_HEADERS,
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -120,6 +117,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 }
 
 // ── API client ─────────────────────────────────────────────────────────────────
+// Paths are relative → they resolve to the Next.js server-side proxy at /api/*
 
 export const api = {
   portfolio: {
@@ -165,7 +163,11 @@ export const api = {
       address: string;
       tag?: string;
       network?: string;
-    }) => post<{ status: string; id?: string; currency: string; amount: number }>("/api/v1/funds/withdraw", body),
+    }) =>
+      post<{ status: string; id?: string; currency: string; amount: number }>(
+        "/api/v1/funds/withdraw",
+        body
+      ),
 
     withdrawals: (currency?: string, limit = 20) => {
       const q = currency ? `&currency=${encodeURIComponent(currency)}` : "";

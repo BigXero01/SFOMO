@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import asyncio
+import random
+import uuid
 from typing import Any, Dict, List
 
 from loguru import logger
@@ -13,9 +15,10 @@ from services.exchange import ExchangeService
 
 settings = get_settings()
 
-TWAP_SLICES = 3          # split large orders into N slices
-TWAP_INTERVAL_SEC = 5    # seconds between slices
-MAX_SLIPPAGE_PCT = 0.003  # 0.3% max acceptable slippage
+TWAP_SLICES = 3                # split large orders into N time-weighted slices
+TWAP_INTERVAL_BASE_SEC = 4     # base interval between slices
+TWAP_INTERVAL_JITTER_SEC = 3   # random ±jitter to resist front-running detection
+MAX_SLIPPAGE_PCT = 0.003        # 0.3% max acceptable slippage
 
 
 async def execution_node(state: TradingState) -> TradingState:
@@ -87,14 +90,33 @@ async def _execute_position(
     signal = position.signal
     side = OrderSide.BUY if signal.direction.value == "long" else OrderSide.SELL
 
-    # Check liquidity from order book
+    # Check order-book liquidity — block the order if depth is insufficient
     ob = state.order_books.get(signal.symbol)
     if ob:
         liquidity_ok = _check_liquidity(ob, side, position.size_usd)
         if not liquidity_ok:
-            logger.warning(f"[Execution] insufficient liquidity for {signal.symbol}")
+            logger.warning(
+                f"[Execution] insufficient liquidity for {signal.symbol} "
+                f"size_usd={position.size_usd:.2f} — skipping"
+            )
+            return None
 
-    # Use TWAP for large orders (> 5% of available liquidity)
+    # Live balance check — confirm we have enough free balance before submitting
+    try:
+        balance = await exchange.fetch_balance()
+        quote_currency = signal.symbol.split("/")[-1] if "/" in signal.symbol else settings.base_currency
+        available = float(balance.get("free", {}).get(quote_currency, 0) or 0)
+        if available < position.size_usd * 1.01:  # 1% buffer for fees
+            logger.warning(
+                f"[Execution] insufficient balance for {signal.symbol}: "
+                f"need {position.size_usd:.2f} {quote_currency}, "
+                f"have {available:.2f}"
+            )
+            return None
+    except Exception as e:
+        logger.warning(f"[Execution] balance check failed for {signal.symbol}: {e}")
+        return None
+
     use_twap = position.size_usd > 1000 and TWAP_SLICES > 1
 
     if use_twap:
@@ -111,11 +133,13 @@ async def _market_execute(
     expected_price: float,
 ) -> ExecutedOrder | None:
     """Simple market order execution with slippage check."""
+    client_order_id = f"sfomo-{uuid.uuid4().hex[:16]}"
     order_result = await exchange.create_order(
         symbol=symbol,
         order_type="market",
         side=side.value,
         amount=position.size_units,
+        params={"clientOrderId": client_order_id},
     )
 
     filled_price = order_result.get("average", order_result.get("price", expected_price))
@@ -131,7 +155,7 @@ async def _market_execute(
         side=side,
         size=position.size_units,
         price=filled_price,
-        order_id=order_result.get("id", ""),
+        order_id=order_result.get("id", client_order_id),
         exchange=settings.exchange_id,
         fees=order_result.get("fee", {}).get("cost", 0.0),
         slippage_pct=slippage,
@@ -145,29 +169,44 @@ async def _twap_execute(
     position: PositionSize,
     expected_price: float,
 ) -> ExecutedOrder | None:
-    """TWAP execution — splits order into time-weighted slices."""
+    """TWAP execution — splits order into randomised time-weighted slices."""
+    from risk.kill_switch import KillSwitch
+    kill_switch = KillSwitch(max_drawdown=settings.max_portfolio_drawdown)
+
     slice_size = position.size_units / TWAP_SLICES
     total_filled = 0.0
     total_cost = 0.0
     total_fees = 0.0
-    last_order_id = ""
+    all_order_ids: List[str] = []
 
     for i in range(TWAP_SLICES):
+        # Re-check kill switch between slices — it may have been triggered
+        # by another concurrent process between our slices.
+        if await kill_switch.is_triggered():
+            logger.warning(
+                f"[Execution] Kill switch triggered mid-TWAP for {symbol} "
+                f"after {i} of {TWAP_SLICES} slices"
+            )
+            break
+
+        client_order_id = f"sfomo-twap-{uuid.uuid4().hex[:12]}"
         try:
             order_result = await exchange.create_order(
                 symbol=symbol,
                 order_type="market",
                 side=side.value,
                 amount=slice_size,
+                params={"clientOrderId": client_order_id},
             )
             price = order_result.get("average", expected_price)
             total_filled += slice_size
             total_cost += slice_size * price
             total_fees += order_result.get("fee", {}).get("cost", 0.0)
-            last_order_id = order_result.get("id", "")
+            all_order_ids.append(order_result.get("id", client_order_id))
 
             if i < TWAP_SLICES - 1:
-                await asyncio.sleep(TWAP_INTERVAL_SEC)
+                jitter = random.uniform(-TWAP_INTERVAL_JITTER_SEC, TWAP_INTERVAL_JITTER_SEC)
+                await asyncio.sleep(max(1.0, TWAP_INTERVAL_BASE_SEC + jitter))
 
         except Exception as e:
             logger.warning(f"[Execution] TWAP slice {i+1} failed: {e}")
@@ -177,13 +216,15 @@ async def _twap_execute(
 
     avg_price = total_cost / total_filled
     slippage = abs(avg_price - expected_price) / expected_price if expected_price > 0 else 0
+    # Concatenate all slice order IDs separated by "|"
+    combined_order_id = "|".join(all_order_ids) if all_order_ids else ""
 
     return ExecutedOrder(
         symbol=symbol,
         side=side,
         size=total_filled,
         price=avg_price,
-        order_id=last_order_id,
+        order_id=combined_order_id,
         exchange=settings.exchange_id,
         fees=total_fees,
         slippage_pct=slippage,

@@ -126,8 +126,14 @@ async def strategy_node(state: TradingState) -> TradingState:
 
     # LLM signal filtering
     try:
+        # Exclude `reasoning` — it contains LLM-generated text that could
+        # echo back adversarial content via prompt injection.
         signals_json = json.dumps(
-            [s.model_dump(mode="json") for s in raw_signals], default=str
+            [
+                {k: v for k, v in s.model_dump(mode="json").items() if k != "reasoning"}
+                for s in raw_signals
+            ],
+            default=str,
         )
         messages = [
             SystemMessage(

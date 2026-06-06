@@ -29,28 +29,35 @@ async def portfolio_manager_node(state: TradingState) -> TradingState:
             await db.record_trade(order, state.cycle_id)
 
         # ── Refresh portfolio snapshot ─────────────────────────────
-        portfolio = await db.get_portfolio_snapshot()
-        if not portfolio:
-            portfolio = PortfolioSnapshot(
-                total_equity=settings.initial_capital,
-                cash=settings.initial_capital,
-                positions_value=0.0,
-                peak_equity=settings.initial_capital,
-            )
+        prev_snapshot = await db.get_portfolio_snapshot()
+        prev_realized_pnl = prev_snapshot.realized_pnl if prev_snapshot else 0.0
 
-        # Update peak equity for drawdown calculation
+        portfolio = prev_snapshot or PortfolioSnapshot(
+            total_equity=settings.initial_capital,
+            cash=settings.initial_capital,
+            positions_value=0.0,
+            peak_equity=settings.initial_capital,
+        )
+
+        # Update peak equity and persist it so restarts don't lose the high watermark
         if portfolio.total_equity > portfolio.peak_equity:
             portfolio.peak_equity = portfolio.total_equity
+
         portfolio.current_drawdown = (
             (portfolio.peak_equity - portfolio.total_equity) / portfolio.peak_equity
             if portfolio.peak_equity > 0 else 0.0
         )
 
+        # Persist the updated snapshot (including the potentially new peak)
+        await db.save_portfolio_snapshot(portfolio)
+
         state.portfolio = portfolio
 
-        # ── Compounding engine ─────────────────────────────────────
-        if portfolio.realized_pnl > 0:
-            reinvest = portfolio.realized_pnl * COMPOUNDING_REINVEST_PCT
+        # ── Compounding engine — use cycle-delta PnL, not cumulative ──────────
+        # Using cumulative realized_pnl would reinvest all-time profits each cycle.
+        cycle_pnl_delta = portfolio.realized_pnl - prev_realized_pnl
+        if cycle_pnl_delta > 0:
+            reinvest = cycle_pnl_delta * COMPOUNDING_REINVEST_PCT
             allocation = _compute_compounding_allocation(
                 reinvest_amount=reinvest,
                 strategy_weights=state.strategy_weights,

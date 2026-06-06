@@ -16,14 +16,30 @@ STREAM_ORDERS = "sfomo:orders"
 STREAM_PORTFOLIO = "sfomo:portfolio"
 STREAM_ALERTS = "sfomo:alerts"
 
+# ── Singleton connection pool shared across all RedisService instances ────────
+_pool: Optional[aioredis.ConnectionPool] = None
 
-class RedisService:
-    def __init__(self):
-        self._redis = aioredis.from_url(
+
+def get_redis_pool() -> aioredis.ConnectionPool:
+    """Return (or lazily create) the module-level connection pool."""
+    global _pool
+    if _pool is None:
+        _pool = aioredis.ConnectionPool.from_url(
             settings.redis_url,
             encoding="utf-8",
             decode_responses=True,
+            max_connections=20,
         )
+    return _pool
+
+
+def get_redis_client() -> aioredis.Redis:
+    return aioredis.Redis(connection_pool=get_redis_pool())
+
+
+class RedisService:
+    def __init__(self):
+        self._redis = get_redis_client()
 
     async def publish_signal(self, signal_data: Dict[str, Any]) -> str:
         return await self._redis.xadd(
@@ -75,4 +91,5 @@ class RedisService:
         return json.loads(val) if val else None
 
     async def close(self) -> None:
-        await self._redis.aclose()
+        # Don't close the shared pool — just release the client reference.
+        pass

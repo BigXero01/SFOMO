@@ -22,17 +22,16 @@ settings = get_settings()
 # Max session: 4 hours (100ms tick × 144 000 = 14 400s)
 MAX_WS_ITERATIONS = 144_000
 MAX_CONNECTIONS = 50
+_AUTH_TIMEOUT_SEC = 10
 
 
 class ConnectionManager:
     def __init__(self):
         self.active: Set[WebSocket] = set()
 
-    async def connect(self, ws: WebSocket) -> bool:
+    def add(self, ws: WebSocket) -> bool:
         if len(self.active) >= MAX_CONNECTIONS:
-            await ws.close(code=status.WS_1008_POLICY_VIOLATION)
             return False
-        await ws.accept()
         self.active.add(ws)
         return True
 
@@ -53,14 +52,26 @@ manager = ConnectionManager()
 
 
 async def websocket_endpoint(ws: WebSocket) -> None:
-    # ── API key auth via query param for WS (headers not reliable in browsers) ──
-    api_key = ws.query_params.get("api_key")
+    # Accept first so we can send a proper close frame on auth failure.
+    await ws.accept()
+
+    # ── In-message auth (first frame must carry the API key) ──────────────────
+    # Using the first message avoids the key appearing in server access logs,
+    # which would happen with query-param auth.
+    try:
+        raw_auth = await asyncio.wait_for(ws.receive_text(), timeout=_AUTH_TIMEOUT_SEC)
+        auth_msg = json.loads(raw_auth)
+        api_key = auth_msg.get("api_key", "")
+    except (asyncio.TimeoutError, json.JSONDecodeError, Exception):
+        await ws.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
     if not settings.api_key or api_key != settings.api_key:
         await ws.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    accepted = await manager.connect(ws)
-    if not accepted:
+    if not manager.add(ws):
+        await ws.close(code=status.WS_1008_POLICY_VIOLATION)
         logger.warning("[WebSocket] connection refused — max connections reached")
         return
 

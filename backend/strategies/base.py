@@ -52,12 +52,13 @@ class BaseStrategy(ABC):
         return 100 - (100 / (1 + rs))
 
     def _compute_ema(self, closes: List[float], period: int) -> float:
-        """Exponential Moving Average (last value)."""
-        if not closes:
-            return 0.0
+        """Exponential Moving Average — seeded from SMA for warm-up accuracy."""
+        if len(closes) < period * 2:
+            return closes[-1] if closes else 0.0
         k = 2 / (period + 1)
-        ema = closes[0]
-        for price in closes[1:]:
+        # Seed from SMA of the first `period` bars instead of closes[0]
+        ema = sum(closes[:period]) / period
+        for price in closes[period:]:
             ema = price * k + ema * (1 - k)
         return ema
 

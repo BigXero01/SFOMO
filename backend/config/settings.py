@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 from typing import List
+from urllib.parse import urlparse
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -26,6 +27,9 @@ class Settings(BaseSettings):
     secret_key: str = Field(default="")
     # API bearer token — required in all non-test environments
     api_key: str = Field(default="")
+    # Separate high-privilege key for kill-switch reset and destructive admin ops.
+    # Generate independently from API_KEY.
+    admin_key: str = Field(default="")
 
     @field_validator("secret_key")
     @classmethod
@@ -74,9 +78,18 @@ class Settings(BaseSettings):
         # Railway (and Heroku-style platforms) export postgres:// or postgresql://
         # SQLAlchemy asyncpg driver requires postgresql+asyncpg://
         if v.startswith("postgres://"):
-            return "postgresql+asyncpg://" + v[len("postgres://"):]
-        if v.startswith("postgresql://") and "+asyncpg" not in v:
-            return "postgresql+asyncpg://" + v[len("postgresql://"):]
+            v = "postgresql+asyncpg://" + v[len("postgres://"):]
+        elif v.startswith("postgresql://") and "+asyncpg" not in v:
+            v = "postgresql+asyncpg://" + v[len("postgresql://"):]
+        # Validate the result is a parseable URL with a recognised scheme
+        parsed = urlparse(v)
+        if parsed.scheme not in {"postgresql+asyncpg", "sqlite+aiosqlite"}:
+            raise ValueError(
+                f"DATABASE_URL has unexpected scheme '{parsed.scheme}'. "
+                "Expected postgresql+asyncpg://..."
+            )
+        if not parsed.hostname:
+            raise ValueError("DATABASE_URL is missing a hostname")
         return v
 
     # ── Redis ──────────────────────────────────────────────────

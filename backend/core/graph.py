@@ -1,6 +1,7 @@
 """LangGraph orchestration — wires all 6 agents into a trading pipeline."""
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import datetime
 from typing import Any, Dict
@@ -18,6 +19,10 @@ from core.state import TradingState
 from config import get_settings
 
 settings = get_settings()
+
+# Global mutex: prevents concurrent cycles from racing on portfolio state,
+# exchange balances, and Redis kill-switch transitions.
+_cycle_mutex = asyncio.Semaphore(1)
 
 
 def _should_execute(state: TradingState) -> str:
@@ -77,7 +82,20 @@ async def run_trading_cycle(
     timeframe: str | None = None,
     config: RunnableConfig | None = None,
 ) -> TradingState:
-    """Execute one full market analysis → execution → learning cycle."""
+    """Execute one full market analysis → execution → learning cycle.
+
+    The global mutex ensures only one cycle runs at a time, preventing races
+    on portfolio snapshots, exchange balances, and kill-switch state.
+    """
+    async with _cycle_mutex:
+        return await _run_cycle_inner(symbols, timeframe, config)
+
+
+async def _run_cycle_inner(
+    symbols: list[str] | None,
+    timeframe: str | None,
+    config: RunnableConfig | None,
+) -> TradingState:
     initial_state = TradingState(
         cycle_id=str(uuid.uuid4()),
         timestamp=datetime.utcnow(),

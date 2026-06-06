@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import List
 
+import redis.asyncio as aioredis
 from loguru import logger
 
 from config import get_settings
@@ -20,11 +21,7 @@ async def risk_management_node(state: TradingState) -> TradingState:
     logger.info(f"[RiskManagement] cycle={state.cycle_id}")
 
     db = DatabaseService()
-    # KillSwitch is Redis-backed — persists across restarts and workers
-    kill_switch = KillSwitch(
-        redis_url=settings.redis_url,
-        max_drawdown=settings.max_portfolio_drawdown,
-    )
+    kill_switch = KillSwitch(max_drawdown=settings.max_portfolio_drawdown)
     position_sizer = PositionSizer(
         risk_per_trade=settings.risk_per_trade,
         base_currency=settings.base_currency,
@@ -129,11 +126,16 @@ async def risk_management_node(state: TradingState) -> TradingState:
             f"drawdown={current_drawdown:.2%} VaR_1d={risk_metrics.portfolio_var_1d:.2%}"
         )
 
+    except (aioredis.RedisError, ConnectionError, OSError) as e:
+        # Redis failure — fail CLOSED: halt execution to avoid trading without
+        # knowing whether the kill switch is triggered.
+        logger.critical(f"[RiskManagement] Redis error — halting cycle: {e}", exc_info=True)
+        state.kill_switch = True
+        state.skip_execution = True
+        state.errors.append(f"risk_management: redis_error: {str(e)}")
     except Exception as e:
         logger.error(f"[RiskManagement] error: {e}", exc_info=True)
         state.errors.append(f"risk_management: {str(e)}")
-    finally:
-        await kill_switch.close()
 
     return state
 

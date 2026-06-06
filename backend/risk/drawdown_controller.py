@@ -47,9 +47,11 @@ class DrawdownController:
                 std_r = math.sqrt(sum((r - mean_r) ** 2 for r in hourly_returns) / len(hourly_returns))
                 metrics.sharpe_ratio = (mean_r / std_r) * math.sqrt(365 * 24) if std_r > 0 else 0.0
 
-                # 1-day VaR at 95% confidence (parametric)
-                metrics.portfolio_var_1d = abs(mean_r - 1.645 * std_r) * math.sqrt(24)
-                metrics.portfolio_var_5d = abs(mean_r - 1.645 * std_r) * math.sqrt(24 * 5)
+                # 1-day VaR at 95% confidence (parametric, loss expressed as positive fraction)
+                # Correct sign: VaR is the expected loss, so -(mean - z*std) when mean < z*std
+                var_1h = -(mean_r - 1.645 * std_r)
+                metrics.portfolio_var_1d = var_1h * math.sqrt(24)
+                metrics.portfolio_var_5d = var_1h * math.sqrt(24 * 5)
 
                 # Sortino (downside deviation only)
                 neg_returns = [r for r in hourly_returns if r < 0]

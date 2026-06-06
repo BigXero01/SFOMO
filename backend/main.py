@@ -1,16 +1,16 @@
 """SFOMO — AI Agent Trading Bot — FastAPI entry point."""
 from __future__ import annotations
 
-import asyncio
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, Response, WebSocket
+from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import APIKeyHeader
+from fastapi import Security
 from loguru import logger
 from sqlalchemy import text
 
-from api.auth import require_api_key
 from api.routes import funds_router, portfolio_router, signals_router, trades_router
 from api.terminal import terminal_websocket_endpoint
 from api.websocket import websocket_endpoint
@@ -20,33 +20,27 @@ from services.vector_store import VectorStoreService
 
 settings = get_settings()
 
-_scheduler_task: asyncio.Task | None = None
+_admin_key_header = APIKeyHeader(name="X-Admin-Key", auto_error=False)
 
 
-async def _trading_scheduler() -> None:
-    """Run a trading cycle on a fixed cadence."""
-    from core.graph import run_trading_cycle
-
-    while True:
-        try:
-            logger.info("[Scheduler] Starting trading cycle...")
-            state = await run_trading_cycle()
-            logger.info(
-                f"[Scheduler] Cycle {state.cycle_id} complete | "
-                f"regime={state.market_regime.value} | "
-                f"executed={len(state.executed_orders)}"
-            )
-        except Exception as exc:
-            logger.error(f"[Scheduler] cycle error: {exc}", exc_info=True)
-
-        interval = 3600 if settings.is_production else 300
-        await asyncio.sleep(interval)
+async def _require_admin_key(admin_key: str | None = Security(_admin_key_header)) -> str:
+    """Separate high-privilege key for destructive admin operations."""
+    configured = settings.admin_key
+    if not configured:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="ADMIN_KEY not configured",
+        )
+    if not admin_key or admin_key != configured:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing admin key",
+        )
+    return admin_key
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _scheduler_task
-
     logger.info("SFOMO starting up...")
 
     try:
@@ -65,17 +59,16 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Vector store init warning: {exc}")
 
     if settings.app_env != "test":
-        _scheduler_task = asyncio.create_task(_trading_scheduler())
+        from core.scheduler import get_scheduler
+        get_scheduler().start()
         logger.info("Trading scheduler started")
 
     yield
 
-    if _scheduler_task:
-        _scheduler_task.cancel()
-        try:
-            await _scheduler_task
-        except asyncio.CancelledError:
-            pass
+    if settings.app_env != "test":
+        from core.scheduler import get_scheduler
+        get_scheduler().stop()
+
     logger.info("SFOMO shutdown complete")
 
 
@@ -108,6 +101,7 @@ async def log_requests(request: Request, call_next) -> Response:
     start = time.perf_counter()
     response: Response = await call_next(request)
     duration_ms = (time.perf_counter() - start) * 1000
+    # Log path only (not query string) to avoid leaking API keys in access logs
     logger.info(
         f"{request.method} {request.url.path} "
         f"status={response.status_code} "
@@ -134,15 +128,16 @@ async def ws_terminal_endpoint(websocket: WebSocket) -> None:
     await terminal_websocket_endpoint(websocket)
 
 
-# ── Kill switch admin endpoint (auth required) ────────────────────────────────
+# ── Kill switch admin endpoint ─────────────────────────────────────────────────
+# Requires ADMIN_KEY — a separate, higher-privilege credential distinct from API_KEY.
+# This prevents an API key compromise from allowing kill-switch reset.
 @app.post("/api/v1/admin/kill-switch/reset")
-async def reset_kill_switch(_: str = require_api_key):
+async def reset_kill_switch(_: str = Security(_require_admin_key)):
     """Operator endpoint to re-enable trading after kill switch fires."""
     from risk.kill_switch import KillSwitch
 
-    ks = KillSwitch(redis_url=settings.redis_url, max_drawdown=settings.max_portfolio_drawdown)
+    ks = KillSwitch(max_drawdown=settings.max_portfolio_drawdown)
     await ks.reset()
-    await ks.close()
     logger.warning("[Admin] Kill switch manually reset")
     return {"status": "kill_switch_reset"}
 

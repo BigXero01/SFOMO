@@ -1,7 +1,11 @@
-"""Kelly-adjusted fixed-fractional position sizer."""
+"""Fixed-fractional position sizer — risk_per_trade × confidence × equity."""
 from __future__ import annotations
 
 from core.state import PositionSize, TradingSignal
+
+# Minimum stop distance as a fraction of entry price.
+# Guards against epsilon-tiny stops caused by IEEE-754 rounding or adversarial signals.
+_MIN_STOP_FRACTION = 0.0001
 
 
 class PositionSizer:
@@ -20,7 +24,8 @@ class PositionSizer:
         risk_amount = equity * adjusted_risk
 
         stop_distance = abs(signal.entry_price - signal.stop_loss)
-        if stop_distance <= 0 or current_price <= 0:
+        min_stop = signal.entry_price * _MIN_STOP_FRACTION
+        if stop_distance < min_stop or current_price <= 0:
             return PositionSize(
                 symbol=signal.symbol,
                 signal=signal,

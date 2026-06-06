@@ -1,6 +1,7 @@
 """Terminal WebSocket endpoint — streams command output to the browser."""
 from __future__ import annotations
 
+import asyncio
 import json
 
 from fastapi import WebSocket, WebSocketDisconnect, status
@@ -13,24 +14,39 @@ settings = get_settings()
 
 MAX_TERMINAL_CONNECTIONS = 10
 _active_count = 0
+_count_lock = asyncio.Lock()
+
+_AUTH_TIMEOUT_SEC = 10
 
 
 async def terminal_websocket_endpoint(ws: WebSocket) -> None:
     global _active_count
 
-    # Auth via query param (same pattern as /ws)
-    api_key = ws.query_params.get("api_key")
-    if not settings.api_key or api_key != settings.api_key:
-        await ws.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
-
-    if _active_count >= MAX_TERMINAL_CONNECTIONS:
-        await ws.close(code=status.WS_1008_POLICY_VIOLATION)
-        logger.warning("[Terminal] connection refused — max connections reached")
-        return
-
+    # Accept first so we can send a close frame with a reason code if needed.
     await ws.accept()
-    _active_count += 1
+
+    # ── In-message auth (first frame must carry the API key) ──────────────────
+    # This prevents the key from appearing in server access logs (vs query param).
+    try:
+        raw_auth = await asyncio.wait_for(ws.receive_text(), timeout=_AUTH_TIMEOUT_SEC)
+        auth_msg = json.loads(raw_auth)
+        provided_key = auth_msg.get("api_key", "")
+    except (asyncio.TimeoutError, json.JSONDecodeError, Exception):
+        await ws.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    if not settings.api_key or provided_key != settings.api_key:
+        await ws.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    # ── Connection limit — protected by lock to prevent TOCTOU ───────────────
+    async with _count_lock:
+        if _active_count >= MAX_TERMINAL_CONNECTIONS:
+            await ws.close(code=status.WS_1008_POLICY_VIOLATION)
+            logger.warning("[Terminal] connection refused — max connections reached")
+            return
+        _active_count += 1
+
     logger.info(f"[Terminal] client connected (active={_active_count})")
 
     async def send_line(text: str, style: str) -> None:
@@ -43,7 +59,6 @@ async def terminal_websocket_endpoint(ws: WebSocket) -> None:
         await ws.send_text(json.dumps({"t": "prompt"}))
 
     try:
-        # Send banner on connect
         for text, style in BANNER:
             await send_line(text, style)
         await send_prompt()
@@ -77,5 +92,6 @@ async def terminal_websocket_endpoint(ws: WebSocket) -> None:
     except Exception as exc:
         logger.error(f"[Terminal] unexpected error: {exc}", exc_info=True)
     finally:
-        _active_count -= 1
+        async with _count_lock:
+            _active_count -= 1
         logger.info(f"[Terminal] client disconnected (active={_active_count})")

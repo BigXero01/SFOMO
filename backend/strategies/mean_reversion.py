@@ -36,7 +36,7 @@ class MeanReversionStrategy(BaseStrategy):
             price = closes[-1]
             sma = self._compute_sma(closes, self.BB_PERIOD)
             std = math.sqrt(
-                sum((c - sma) ** 2 for c in closes[-self.BB_PERIOD:]) / self.BB_PERIOD
+                sum((c - sma) ** 2 for c in closes[-self.BB_PERIOD:]) / (self.BB_PERIOD - 1)
             )
             upper_band = sma + self.BB_STD * std
             lower_band = sma - self.BB_STD * std

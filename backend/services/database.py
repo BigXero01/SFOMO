@@ -96,6 +96,12 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 );
 
 SELECT create_hypertable('audit_logs', 'created_at', if_not_exists => TRUE);
+
+CREATE UNIQUE INDEX IF NOT EXISTS trades_order_id_uidx
+    ON trades(order_id)
+    WHERE order_id IS NOT NULL AND order_id <> '';
+
+REVOKE UPDATE, DELETE ON audit_logs FROM PUBLIC;
 """
 
 
@@ -120,7 +126,8 @@ class DatabaseService:
                 text(
                     "INSERT INTO trades "
                     "(cycle_id, symbol, side, size, price, order_id, exchange, fees, slippage_pct) "
-                    "VALUES (:cycle_id, :symbol, :side, :size, :price, :order_id, :exchange, :fees, :slippage)"
+                    "VALUES (:cycle_id, :symbol, :side, :size, :price, :order_id, :exchange, :fees, :slippage) "
+                    "ON CONFLICT (order_id) WHERE order_id IS NOT NULL AND order_id <> '' DO NOTHING"
                 ),
                 {
                     "cycle_id": cycle_id,

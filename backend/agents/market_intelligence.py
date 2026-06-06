@@ -46,20 +46,58 @@ Analyze the provided market data and return a JSON object with:
 }
 Return only valid JSON, no markdown."""
 
-_UNSAFE_RE = re.compile(r"[\x00-\x1f\x7f]")  # control chars
+_UNSAFE_RE = re.compile(r"[\x00-\x1f\x7f]")
 
 
-def _sanitize(value: str, max_len: int = 20) -> str:
-    """Strip control characters that could break prompt structure."""
-    return _UNSAFE_RE.sub(" ", value)[:max_len]
+def _sanitize(value: Any, max_len: int = 200) -> str:
+    """Strip control characters and cap length to prevent prompt injection."""
+    return _UNSAFE_RE.sub(" ", str(value))[:max_len]
+
+
+# ── Bounded sub-models for LLM response validation ────────────────────────────
+
+class _MarketStructure(BaseModel):
+    trend_direction: str = "sideways"
+    key_support: float = 0.0
+    key_resistance: float = 0.0
+    higher_highs: bool = False
+    higher_lows: bool = False
+
+    @field_validator("trend_direction")
+    @classmethod
+    def _valid_direction(cls, v: str) -> str:
+        if v not in {"up", "down", "sideways"}:
+            return "sideways"
+        return v
+
+    @field_validator("key_support", "key_resistance")
+    @classmethod
+    def _positive_price(cls, v: float) -> float:
+        return max(0.0, v)
+
+
+class _MarketSentiment(BaseModel):
+    overall: float = 0.0
+    fear_greed: int = 50
+    social_score: float = 0.0
+
+    @field_validator("overall")
+    @classmethod
+    def _clamp_overall(cls, v: float) -> float:
+        return max(-1.0, min(1.0, v))
+
+    @field_validator("fear_greed")
+    @classmethod
+    def _clamp_fg(cls, v: int) -> int:
+        return max(0, min(100, v))
 
 
 class _MarketAnalysis(BaseModel):
     """Validated schema for LLM market analysis response."""
     regime: str
-    structure: dict = {}
-    sentiment: dict = {}
-    key_levels: dict = {}
+    structure: _MarketStructure = _MarketStructure()
+    sentiment: _MarketSentiment = _MarketSentiment()
+    key_levels: Dict[str, Any] = {}
     news_summary: str = ""
     risk_flags: List[str] = []
     opportunities: List[str] = []
@@ -75,7 +113,12 @@ class _MarketAnalysis(BaseModel):
     @field_validator("news_summary")
     @classmethod
     def _cap_news(cls, v: str) -> str:
-        return v[:500]
+        return _UNSAFE_RE.sub(" ", v)[:500]
+
+    @field_validator("risk_flags", "opportunities")
+    @classmethod
+    def _cap_list(cls, v: List[str]) -> List[str]:
+        return [_UNSAFE_RE.sub(" ", s)[:200] for s in v[:10]]
 
 
 def _compute_technical_context(candles: Dict[str, Any]) -> str:
@@ -126,17 +169,26 @@ async def market_intelligence_node(state: TradingState) -> TradingState:
 
         tech_context = _compute_technical_context(candles)
 
-        # Sanitize any user-controlled or external values before injecting into prompt
+        # Sanitize all external/user-controlled values before LLM injection
         safe_timeframe = _sanitize(state.timeframe, max_len=4)
+        # Sentiment and on-chain are external API data — sanitize numeric values only
+        safe_sentiment = {
+            k: float(v) if isinstance(v, (int, float)) else 0.0
+            for k, v in sentiment.items()
+        }
+        safe_on_chain = {
+            k: float(v) if isinstance(v, (int, float)) else 0.0
+            for k, v in on_chain.items()
+        }
 
         messages = [
             SystemMessage(content=SYSTEM_PROMPT),
             HumanMessage(
                 content=(
                     f"Technical context:\n{tech_context}\n\n"
-                    f"Sentiment scores: {json.dumps(sentiment)}\n"
+                    f"Sentiment scores: {json.dumps(safe_sentiment)}\n"
                     f"Funding rates: {json.dumps(funding_rates)}\n"
-                    f"On-chain metrics: {json.dumps(on_chain)}\n"
+                    f"On-chain metrics: {json.dumps(safe_on_chain)}\n"
                     f"Analyze for timeframe: {safe_timeframe}"
                 )
             ),
@@ -152,21 +204,21 @@ async def market_intelligence_node(state: TradingState) -> TradingState:
             return state
 
         regime = MarketRegime(analysis.regime)
-        structure = analysis.structure
+        structure = analysis.structure.model_dump()
         sentiment_data = analysis.sentiment
 
         state.candles = candles
         state.order_books = order_books
         state.funding_rates = funding_rates
         state.open_interest = open_interest
-        state.sentiment_scores = {s: sentiment_data.get("overall", 0.0) for s in state.symbols}
+        state.sentiment_scores = {s: sentiment_data.overall for s in state.symbols}
         state.on_chain_metrics = on_chain
         state.market_regime = regime
         state.market_structure = structure
-        state.news_summary = analysis.get("news_summary", "")
+        state.news_summary = analysis.news_summary
         state.agent_messages.append(
             f"[MarketIntelligence] Regime={regime.value} | "
-            f"Flags={analysis.get('risk_flags', [])}"
+            f"Flags={analysis.risk_flags}"
         )
 
         logger.info(f"[MarketIntelligence] regime={regime.value}")

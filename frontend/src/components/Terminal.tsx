@@ -91,11 +91,13 @@ export function Terminal({ apiKey, wsUrl = "" }: TerminalProps) {
         ? window.location.origin.replace(/^http/, "ws")
         : "ws://localhost:8000");
 
-    const url = `${base}/ws/terminal?api_key=${encodeURIComponent(apiKey)}`;
+    const url = `${base}/ws/terminal`;
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
     ws.onopen = () => {
+      // In-message auth: send key as first frame so it never appears in server access logs
+      ws.send(JSON.stringify({ api_key: apiKey }));
       setConnected(true);
     };
 

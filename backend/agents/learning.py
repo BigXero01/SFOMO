@@ -174,6 +174,9 @@ def _compute_strategy_metrics(trades: List[Dict[str, Any]]) -> Dict[str, Any]:
     return metrics
 
 
+_MAX_WEIGHT_DELTA = 0.05  # max ±5% per cycle to prevent runaway weight drift
+
+
 def _apply_weight_adjustments(
     current_weights: Dict[str, float],
     adjustments: Dict[str, float],
@@ -182,7 +185,13 @@ def _apply_weight_adjustments(
 ) -> Dict[str, float]:
     """Apply delta adjustments and re-normalize weights."""
     updated = {
-        k: max(min_weight, min(max_weight, v + adjustments.get(k, 0.0)))
+        k: max(
+            min_weight,
+            min(
+                max_weight,
+                v + max(-_MAX_WEIGHT_DELTA, min(_MAX_WEIGHT_DELTA, adjustments.get(k, 0.0))),
+            ),
+        )
         for k, v in current_weights.items()
     }
     total = sum(updated.values())

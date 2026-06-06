@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import re
-import time
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -13,6 +12,7 @@ from api.auth import require_api_key
 from config import get_settings
 from services.database import DatabaseService
 from services.exchange import ExchangeService
+from services.redis_service import get_redis_client
 
 settings = get_settings()
 
@@ -28,9 +28,7 @@ _CURRENCY_RE = re.compile(r"^[A-Z0-9]{1,10}$")
 _NETWORK_RE = re.compile(r"^[A-Za-z0-9]{1,30}$")
 _CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
 
-# Withdrawal rate limit: 1 per IP per 60 seconds
-_withdraw_ts: dict[str, float] = {}
-_WITHDRAW_COOLDOWN = 60.0
+_WITHDRAW_COOLDOWN = 60  # seconds — enforced in Redis so it works across workers
 
 
 class WithdrawRequest(BaseModel):
@@ -178,16 +176,18 @@ async def get_deposits(currency: Optional[str] = None, limit: int = 20):
 
 @router.post("/withdraw")
 async def post_withdraw(request: Request, body: WithdrawRequest):
-    """Submit a withdrawal. Rate-limited to 1 per 60 s per IP."""
+    """Submit a withdrawal. Rate-limited to 1 per 60 s per IP (Redis-backed)."""
     ip = _client_ip(request)
-    now = time.monotonic()
-    wait = _WITHDRAW_COOLDOWN - (now - _withdraw_ts.get(ip, 0))
-    if wait > 0:
+    redis = get_redis_client()
+    rate_key = f"sfomo:withdraw_rl:{ip}"
+    # SET NX EX is atomic — safe across multiple workers/processes
+    acquired = await redis.set(rate_key, "1", nx=True, ex=_WITHDRAW_COOLDOWN)
+    if not acquired:
+        ttl = await redis.ttl(rate_key)
         raise HTTPException(
             status_code=429,
-            detail=f"Rate limit: wait {int(wait)}s before next withdrawal",
+            detail=f"Rate limit: wait {max(1, ttl)}s before next withdrawal",
         )
-    _withdraw_ts[ip] = now
 
     db = DatabaseService()
     exchange = ExchangeService()
