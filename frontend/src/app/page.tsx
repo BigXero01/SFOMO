@@ -92,8 +92,10 @@ export default function Dashboard() {
   const pnl = portfolio?.realized_pnl ?? 0;
   const unrealized = portfolio?.unrealized_pnl ?? 0;
 
-  // API key for WebSocket — read from env or fall back to empty (auth will fail gracefully)
+  // API key for WebSocket — must match backend API_KEY
   const wsApiKey = process.env.NEXT_PUBLIC_API_KEY ?? "";
+  // WS base URL: on Railway the frontend and backend are separate services
+  const wsUrl = process.env.NEXT_PUBLIC_WS_URL ?? "";
 
   return (
     <div className="min-h-screen bg-surface text-[#e8eaf6]">
@@ -228,7 +230,7 @@ export default function Dashboard() {
       {/* ── Terminal tab ───────────────────────────────────────────────────── */}
       {tab === "terminal" && (
         <div className="px-6 py-6 max-w-screen-2xl mx-auto" style={{ height: "calc(100vh - 73px)" }}>
-          <Terminal apiKey={wsApiKey} />
+          <Terminal apiKey={wsApiKey} wsUrl={wsUrl} />
         </div>
       )}
     </div>

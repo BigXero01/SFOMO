@@ -90,14 +90,12 @@ app = FastAPI(
     openapi_url=None if settings.is_production else "/openapi.json",
 )
 
-# ── CORS: exact origins only, explicit methods ─────────────────────────────────
-_allowed_origins = ["http://localhost:3000"]
-if settings.is_production:
-    _allowed_origins = ["https://app.sfomo.app"]
-
+# ── CORS: driven by CORS_ORIGINS env var (comma-separated) ────────────────────
+# Local:   CORS_ORIGINS=http://localhost:3000
+# Railway: CORS_ORIGINS=https://your-frontend.up.railway.app
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_allowed_origins,
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-API-Key"],

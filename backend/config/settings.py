@@ -4,7 +4,7 @@ import os
 from functools import lru_cache
 from typing import List
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _IS_TEST = os.getenv("APP_ENV", "") == "test"
@@ -14,7 +14,13 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # ── App ────────────────────────────────────────────────────
-    app_env: str = "development"
+    # Railway sets RAILWAY_ENVIRONMENT=production automatically; fall back to APP_ENV
+    app_env: str = Field(
+        default_factory=lambda: (
+            os.getenv("RAILWAY_ENVIRONMENT")
+            or os.getenv("APP_ENV", "development")
+        )
+    )
     log_level: str = "INFO"
     # Required in all non-test environments (min 32 chars)
     secret_key: str = Field(default="")
@@ -59,9 +65,22 @@ class Settings(BaseSettings):
     exchange_sandbox: bool = True
 
     # ── Database ───────────────────────────────────────────────
+    # Railway PostgreSQL plugin exports DATABASE_URL as postgres:// — auto-fixed below
     database_url: str = "postgresql+asyncpg://sfomo:sfomo@localhost:5432/sfomo"
 
+    @field_validator("database_url")
+    @classmethod
+    def _fix_database_url(cls, v: str) -> str:
+        # Railway (and Heroku-style platforms) export postgres:// or postgresql://
+        # SQLAlchemy asyncpg driver requires postgresql+asyncpg://
+        if v.startswith("postgres://"):
+            return "postgresql+asyncpg://" + v[len("postgres://"):]
+        if v.startswith("postgresql://") and "+asyncpg" not in v:
+            return "postgresql+asyncpg://" + v[len("postgresql://"):]
+        return v
+
     # ── Redis ──────────────────────────────────────────────────
+    # Railway Redis plugin exports REDIS_URL in a compatible format
     redis_url: str = "redis://localhost:6379/0"
 
     # ── Qdrant ─────────────────────────────────────────────────
@@ -94,9 +113,21 @@ class Settings(BaseSettings):
     )
     timeframe: str = "1h"
 
+    # ── CORS ───────────────────────────────────────────────────
+    # Comma-separated list of allowed origins.
+    # On Railway: set CORS_ORIGINS=https://your-frontend.up.railway.app
+    cors_origins_raw: str = Field(
+        default="http://localhost:3000",
+        alias="CORS_ORIGINS",
+    )
+
     @property
     def trading_pairs(self) -> List[str]:
         return [p.strip() for p in self.trading_pairs_raw.split(",")]
+
+    @property
+    def cors_origins(self) -> List[str]:
+        return [o.strip() for o in self.cors_origins_raw.split(",") if o.strip()]
 
     @property
     def is_production(self) -> bool:
