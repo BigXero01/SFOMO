@@ -1,4 +1,4 @@
-"""SFOMO — AI Agent Trading Bot — FastAPI entry point."""
+"""Sfomo — AI Agent Trading Bot — FastAPI entry point."""
 from __future__ import annotations
 
 import time
@@ -41,7 +41,7 @@ async def _require_admin_key(admin_key: str | None = Security(_admin_key_header)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("SFOMO starting up...")
+    logger.info("Sfomo starting up...")
 
     try:
         db = DatabaseService()
@@ -69,11 +69,11 @@ async def lifespan(app: FastAPI):
         from core.scheduler import get_scheduler
         get_scheduler().stop()
 
-    logger.info("SFOMO shutdown complete")
+    logger.info("Sfomo shutdown complete")
 
 
 app = FastAPI(
-    title="SFOMO — AI Agent Trading Bot",
+    title="Sfomo — AI Agent Trading Bot",
     description="Institutional-style crypto asset management via multi-agent AI",
     version="1.0.0",
     lifespan=lifespan,
@@ -170,4 +170,4 @@ async def health():
 
 @app.get("/")
 async def root():
-    return {"name": "SFOMO — AI Agent Trading Bot", "health": "/health"}
+    return {"name": "Sfomo — AI Agent Trading Bot", "health": "/health"}

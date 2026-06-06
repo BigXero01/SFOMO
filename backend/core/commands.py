@@ -73,7 +73,7 @@ BANNER = [
     ("  ███████║██║     ╚██████╔╝██║ ╚═╝ ██║╚██████╔╝", "gold"),
     ("  ╚══════╝╚═╝      ╚═════╝ ╚═╝     ╚═╝ ╚═════╝ ", "gold"),
     ("", "normal"),
-    ("  AI Agent Trading System  ·  Production Terminal", "muted"),
+    ("  Sfomo  ·  AI Agent Trading System  ·  Production Terminal", "muted"),
     ("  Type  help  to list all commands", "dim"),
     ("", "normal"),
 ]
@@ -1056,7 +1056,7 @@ async def cmd_ping(_args: List[str]) -> AsyncIterator[Line]:
 async def cmd_version(_args: List[str]) -> AsyncIterator[Line]:
     import sys
     yield _line("", "normal")
-    yield _line("  SFOMO  v1.0.0", "gold")
+    yield _line("  Sfomo  v1.0.0", "gold")
     yield _line(f"  Python  {sys.version.split()[0]}", "muted")
     yield _line(f"  Env     {settings.app_env}", "muted")
     yield _line(f"  Model   {settings.openai_model}", "muted")

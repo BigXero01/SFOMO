@@ -216,7 +216,7 @@ export function Terminal({ apiKey, wsUrl = "" }: TerminalProps) {
         <span className="w-3 h-3 rounded-full bg-[#facc15]" />
         <span className="w-3 h-3 rounded-full bg-[#4ade80]" />
         <span className="ml-2 text-[#3d4461] text-[11px] tracking-widest uppercase">
-          SFOMO Terminal
+          Sfomo Terminal
         </span>
         <div className="ml-auto flex items-center gap-1.5">
           <span

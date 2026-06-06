@@ -106,7 +106,7 @@ export default function Dashboard() {
             <span className="text-surface text-xs font-black">SF</span>
           </div>
           <div>
-            <h1 className="text-lg font-bold tracking-tight">SFOMO</h1>
+            <h1 className="text-lg font-bold tracking-tight">Sfomo</h1>
             <p className="text-xs text-[#7c85a2]">AI Agent Trading Bot</p>
           </div>
         </div>
