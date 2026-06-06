@@ -500,11 +500,11 @@
 <!-- ── HERO ─────────────────────────────────────────────────────────────────── -->
 <section class="hero">
   <div class="container">
-    <div class="hero-eyebrow"><span></span> Open Source · Paper Trading by Default</div>
+    <div class="hero-eyebrow"><span></span> Open Source · Self-Hosted · Your Keys</div>
     <h1>AI Agent<br>Trading Bot</h1>
     <p class="hero-sub">
-      Institutional-style crypto asset management via a 6-agent LangGraph pipeline.
-      Compounds capital through disciplined risk management — not gambling.
+      Six autonomous agents that never sleep, never flinch, never revenge trade.
+      Scans markets, fires signals, sizes entries, executes TWAP, compounds the wins — then rewrites its own strategy weights.
     </p>
     <div class="hero-actions">
       <a href="https://github.com/bigxero01/sfomo" class="btn-primary">View on GitHub</a>
@@ -514,23 +514,23 @@
     <div class="stats-row fade-in" style="transition-delay:.1s">
       <div class="stat-item">
         <span class="num">6</span>
-        <div class="label">AI Agents in pipeline</div>
+        <div class="label">Agents chained in sequence</div>
       </div>
       <div class="stat-item">
         <span class="num">5</span>
-        <div class="label">Trading strategies</div>
+        <div class="label">Concurrent strategies, one signal</div>
       </div>
       <div class="stat-item">
         <span class="num">0.5%</span>
-        <div class="label">Max risk per trade</div>
+        <div class="label">Max equity at risk per entry</div>
       </div>
       <div class="stat-item">
         <span class="num">15%</span>
-        <div class="label">Drawdown kill switch</div>
+        <div class="label">Hard drawdown cut, Redis-locked</div>
       </div>
       <div class="stat-item">
         <span class="num">1.5×</span>
-        <div class="label">Min R:R ratio</div>
+        <div class="label">Minimum reward ratio enforced</div>
       </div>
     </div>
   </div>
@@ -587,8 +587,8 @@
   <div class="container">
     <div class="section-header fade-in">
       <div class="tag">Pipeline</div>
-      <h2>6 AI Agents, Running in Sequence</h2>
-      <p>Each cycle runs all six agents in a deterministic LangGraph pipeline. GPT-4o reasons at the strategy and learning layers.</p>
+      <h2>The Machine Never Sleeps</h2>
+      <p>One trigger. Six agents fire in sequence. GPT-4o filters to high-conviction only — no noise, no FOMO, no gut calls.</p>
     </div>
 
     <div class="grid-2 fade-in">
@@ -598,21 +598,21 @@
             <div class="pipeline-num">1</div>
             <div class="pipeline-content">
               <h4>Market Intelligence</h4>
-              <p>Fetches OHLCV candles, order books, funding rates, sentiment scores, and on-chain metrics. LLM classifies the current market regime.</p>
+              <p>OHLCV, order books, funding rates, sentiment, on-chain data. LLM reads the room — bull trend, bear, or chop — before a single strategy runs.</p>
             </div>
           </div>
           <div class="pipeline-item">
             <div class="pipeline-num">2</div>
             <div class="pipeline-content">
               <h4>Strategy</h4>
-              <p>Runs all 5 strategies in parallel, applies regime-based weight adjustments, then LLM filters to high-conviction signals only. Reasoning field excluded from filter prompt to prevent injection.</p>
+              <p>All five strategies fire simultaneously. Regime shifts their weights. GPT-4o cuts the noise — 7 raw signals might become 2. Only the ones worth taking make it through.</p>
             </div>
           </div>
           <div class="pipeline-item">
             <div class="pipeline-num">3</div>
             <div class="pipeline-content">
               <h4>Risk Management</h4>
-              <p>Fixed-fractional position sizing by confidence, VaR check, drawdown guard, kill switch verification. Fails closed on Redis errors.</p>
+              <p>Sizes every position by confidence. Checks VaR, drawdown, and the kill switch. If Redis is down, the cycle halts — it will never trade blind.</p>
             </div>
           </div>
         </div>
@@ -623,21 +623,21 @@
             <div class="pipeline-num">4</div>
             <div class="pipeline-content">
               <h4>Execution</h4>
-              <p>Live balance check → TWAP for large orders (with kill switch re-check between slices and random interval jitter) → market order for small. UUID clientOrderId on every order. Liquidity check blocks if insufficient depth.</p>
+              <p>Checks live balance. Large orders go TWAP with jitter — no footprint. Kill switch re-checked between slices. If the book is too thin, it skips. No reckless market orders.</p>
             </div>
           </div>
           <div class="pipeline-item">
             <div class="pipeline-num">5</div>
             <div class="pipeline-content">
               <h4>Portfolio Manager</h4>
-              <p>Updates equity snapshot, persists peak for drawdown calculation, compounding reinvestment using cycle-delta PnL (not cumulative), rebalance detection.</p>
+              <p>Locks in the new equity peak, runs the compounding engine on this cycle's delta only — not cumulative — and queues rebalances when allocations drift.</p>
             </div>
           </div>
           <div class="pipeline-item">
             <div class="pipeline-num">6</div>
             <div class="pipeline-content">
               <h4>Learning</h4>
-              <p>LLM evaluates the completed cycle, adjusts strategy weights (±5% cap per cycle), records regime history, stores cycle summary in Qdrant vector DB for future reference.</p>
+              <p>GPT-4o grades the cycle. Winners get more weight next time. Losers get less. Capped at ±5% per cycle so it can't lurch. Memory written to Qdrant for long-range context.</p>
             </div>
           </div>
         </div>
@@ -651,45 +651,45 @@
   <div class="container">
     <div class="section-header fade-in">
       <div class="tag">Strategies</div>
-      <h2>5 Battle-Tested Approaches</h2>
-      <p>Weights are dynamically adjusted per market regime. The Learning agent fine-tunes them each cycle based on performance.</p>
+      <h2>Five Strategies. One Weighted Signal.</h2>
+      <p>They all run every cycle. The regime shifts their weights. What worked last session gets more capital. What didn't gets cut.</p>
     </div>
 
     <div class="grid-3 fade-in">
       <div class="strat-card">
         <div class="strat-icon">📈</div>
         <h4>Trend Following</h4>
-        <p>EMA crossover with RSI filter. Captures sustained directional moves in bull and bear markets. Default weight 30%.</p>
+        <p>EMA crossover + RSI filter. Catches the big runs. Highest base weight because trending markets are where the cleanest edges live.</p>
         <span class="badge badge-trend">30% base weight</span>
       </div>
       <div class="strat-card">
         <div class="strat-icon">🚀</div>
         <h4>Momentum Breakout</h4>
-        <p>Donchian channel breakouts confirmed by volume surge. Targets explosive moves at structural highs/lows. Default weight 25%.</p>
+        <p>Donchian channel rips confirmed by a volume spike. Waits for the break, waits for the fuel, then enters. No fake-outs without volume.</p>
         <span class="badge badge-mom">25% base weight</span>
       </div>
       <div class="strat-card">
         <div class="strat-icon">↩</div>
         <h4>Mean Reversion</h4>
-        <p>Bollinger Bands (sample std) + RSI extremes. Buys oversold, sells overbought in ranging conditions. Default weight 20%.</p>
+        <p>Bollinger Bands + RSI extremes. Buys the panic, fades the euphoria. Weight spikes in sideways regimes when trend strategies go quiet.</p>
         <span class="badge badge-mean">20% base weight</span>
       </div>
       <div class="strat-card">
         <div class="strat-icon">⚡</div>
         <h4>Volatility Arb</h4>
-        <p>Fades funding rate extremes on perpetuals. Profits from mean-reversion of funding after extreme positive/negative readings. Default weight 15%.</p>
+        <p>Fades funding rate extremes on perps. When longs are paying an absurd rate, the bot fades them. Pure structural edge, no directional bias needed.</p>
         <span class="badge badge-vol">15% base weight</span>
       </div>
       <div class="strat-card">
         <div class="strat-icon">🔄</div>
         <h4>Portfolio Rotation</h4>
-        <p>Risk-adjusted momentum ranking across all trading pairs. Rotates capital toward the strongest performers. Default weight 10%.</p>
+        <p>Risk-adjusted momentum ranking across every pair. Capital flows to what's ripping. Cuts the dead weight automatically.</p>
         <span class="badge badge-rot">10% base weight</span>
       </div>
       <div class="strat-card" style="background: rgba(201,168,76,.04); border-color: rgba(201,168,76,.15);">
         <div class="strat-icon" style="background: rgba(201,168,76,.15);">🧠</div>
         <h4>Regime Adaptation</h4>
-        <p>Weights are multiplied by regime-specific adjustments each cycle. Bull trend boosts trend/momentum; ranging boosts mean reversion. Learning agent further refines.</p>
+        <p>None of the above runs at fixed weight. Bull trend? Trend and momentum get boosted. Choppy range? Mean reversion leads. The Learning agent refines every cycle.</p>
         <span class="badge badge-mom">Dynamic</span>
       </div>
     </div>
@@ -701,8 +701,8 @@
   <div class="container">
     <div class="section-header fade-in">
       <div class="tag">Risk Management</div>
-      <h2>Safety First, Always</h2>
-      <p>Multiple independent layers of protection. Paper trading by default. Every decision is logged.</p>
+      <h2>Guardrails That Actually Hold</h2>
+      <p>Four layers between the signal and the order. Designed to not blow the stack — not as a suggestion, as a hard constraint.</p>
     </div>
 
     <div class="grid-2 fade-in">
@@ -780,7 +780,7 @@
   <div class="container">
     <div class="section-header fade-in">
       <div class="tag">Stack</div>
-      <h2>Production-Grade Infrastructure</h2>
+      <h2>Nothing Borrowed from Toy Projects</h2>
     </div>
     <div class="stack-grid fade-in">
       <div class="stack-item"><span class="tech-name">FastAPI</span>Async Python backend</div>
@@ -890,28 +890,28 @@
   <div class="container">
     <div class="section-header fade-in">
       <div class="tag">Dashboard</div>
-      <h2>Three Views, Complete Control</h2>
+      <h2>See Everything. Touch Everything.</h2>
     </div>
     <div class="grid-3 fade-in">
       <div class="card">
         <div style="font-size:1.8rem;margin-bottom:14px">📊</div>
         <h4>Dashboard</h4>
         <p style="color:var(--muted);font-size:.85rem;margin-top:8px;line-height:1.7">
-          Live equity curve, realized and unrealized P&amp;L, drawdown gauge, agent status, signal list, recent trades. Auto-refreshes every 30s.
+          Live equity curve, P&amp;L, drawdown gauge, agent status, active signals, recent fills. You'll know exactly what the bot is doing and why.
         </p>
       </div>
       <div class="card">
         <div style="font-size:1.8rem;margin-bottom:14px">💰</div>
         <h4>Funds</h4>
         <p style="color:var(--muted);font-size:.85rem;margin-top:8px;line-height:1.7">
-          Exchange balances, on-chain deposit addresses, withdrawal form with 2-step confirmation, full deposit/withdrawal history with status badges.
+          Exchange balances, on-chain deposit addresses, withdrawal flow with 2-step confirm. Rate-limited per IP via Redis — no fat-finger nukes.
         </p>
       </div>
       <div class="card">
         <div style="font-size:1.8rem;margin-bottom:14px">⌨️</div>
         <h4>Terminal</h4>
         <p style="color:var(--muted);font-size:.85rem;margin-top:8px;line-height:1.7">
-          Full production terminal with live cycle streaming, command history, Ctrl+L clear. Run cycles, check status, manage scheduler, view signals in real time.
+          Production terminal that streams live cycle output — watch agents run in real time. Command history, Ctrl+L, kill switch controls. Built for operators, not spectators.
         </p>
       </div>
     </div>
@@ -923,20 +923,20 @@
   <div class="container" style="text-align:center">
     <div class="glow-line"></div>
     <div class="fade-in">
-      <div class="hero-eyebrow" style="display:inline-flex;margin-bottom:24px"><span></span> EXCHANGE_SANDBOX=true by default</div>
-      <h2 style="font-size:clamp(2rem,5vw,3.5rem);margin-bottom:16px">Start paper trading today</h2>
+      <div class="hero-eyebrow" style="display:inline-flex;margin-bottom:24px"><span></span> Ships as sandbox — flip one env var to go live</div>
+      <h2 style="font-size:clamp(2rem,5vw,3.5rem);margin-bottom:16px">Clone it. Configure it. Let it rip.</h2>
       <p style="color:var(--muted);max-width:480px;margin:0 auto 36px;font-size:1rem;line-height:1.7">
-        No real funds at risk until you're ready. Set EXCHANGE_SANDBOX=false and provide live credentials when you want to go live.
+        Self-hosted. No SaaS middleman. No subscription. Fork the repo, drop in your keys, and it's yours. Paper mode until you decide otherwise.
       </p>
       <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:36px">
         <a href="https://github.com/bigxero01/sfomo" class="btn-primary">Get the Code</a>
         <a href="https://railway.app" class="btn-secondary">Deploy on Railway</a>
       </div>
       <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
-        <span class="feature-pill"><span></span> Paper trading by default</span>
-        <span class="feature-pill"><span></span> Open source, self-hosted</span>
-        <span class="feature-pill"><span></span> Kill switch at 15% drawdown</span>
-        <span class="feature-pill"><span></span> 32-finding security hardened</span>
+        <span class="feature-pill"><span></span> Paper mode by default</span>
+        <span class="feature-pill"><span></span> Self-hosted, no trust required</span>
+        <span class="feature-pill"><span></span> Hard kill switch at 15% drawdown</span>
+        <span class="feature-pill"><span></span> 32-finding security audit</span>
       </div>
     </div>
   </div>
@@ -946,10 +946,9 @@
 <footer>
   <div class="container">
     <div class="footer-logo"><span>S</span>fomo</div>
-    <p style="margin-bottom:8px">AI Agent Trading Bot · Open Source</p>
+    <p style="margin-bottom:8px">AI Agent Trading Bot · Open Source · Self-Hosted</p>
     <p style="color:var(--dim);font-size:.75rem">
-      Not financial advice. Use paper trading until you understand the risks.
-      Always keep EXCHANGE_SANDBOX=true during testing.
+      Built for degens. Runs anywhere. No SaaS, no fees, no trust required.
     </p>
   </div>
 </footer>
