@@ -12,6 +12,7 @@ from sqlalchemy import text
 
 from api.auth import require_api_key
 from api.routes import portfolio_router, signals_router, trades_router
+from api.terminal import terminal_websocket_endpoint
 from api.websocket import websocket_endpoint
 from config import get_settings
 from services.database import AsyncSessionLocal, DatabaseService
@@ -127,6 +128,11 @@ app.include_router(trades_router, prefix="/api/v1")
 @app.websocket("/ws")
 async def ws_endpoint(websocket: WebSocket) -> None:
     await websocket_endpoint(websocket)
+
+
+@app.websocket("/ws/terminal")
+async def ws_terminal_endpoint(websocket: WebSocket) -> None:
+    await terminal_websocket_endpoint(websocket)
 
 
 # ── Kill switch admin endpoint (auth required) ────────────────────────────────

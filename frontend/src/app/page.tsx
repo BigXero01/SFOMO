@@ -7,6 +7,9 @@ import { RiskMetrics } from "@/components/RiskMetrics";
 import { AgentStatus } from "@/components/AgentStatus";
 import { TradeHistory } from "@/components/TradeHistory";
 import { SignalList } from "@/components/SignalList";
+import { Terminal } from "@/components/Terminal";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function StatCard({
   label,
@@ -28,7 +31,12 @@ function StatCard({
   );
 }
 
+type Tab = "dashboard" | "terminal";
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+
 export default function Dashboard() {
+  const [tab, setTab] = useState<Tab>("dashboard");
   const [portfolio, setPortfolio] = useState<PortfolioSnapshot | null>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [performance, setPerformance] = useState<Performance | null>(null);
@@ -83,6 +91,9 @@ export default function Dashboard() {
   const pnl = portfolio?.realized_pnl ?? 0;
   const unrealized = portfolio?.unrealized_pnl ?? 0;
 
+  // API key for WebSocket — read from env or fall back to empty (auth will fail gracefully)
+  const wsApiKey = process.env.NEXT_PUBLIC_API_KEY ?? "";
+
   return (
     <div className="min-h-screen bg-surface text-[#e8eaf6]">
       {/* Header */}
@@ -96,74 +107,112 @@ export default function Dashboard() {
             <p className="text-xs text-[#7c85a2]">AI Agent Trading Bot</p>
           </div>
         </div>
-        <div className="flex items-center gap-4 text-xs text-[#7c85a2]">
-          {health && (
-            <>
-              <span className={`flex items-center gap-1 ${health.status === "ok" ? "text-success" : "text-danger"}`}>
-                <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                {health.status.toUpperCase()}
-              </span>
-              <span>{health.exchange} • {health.env}</span>
-            </>
-          )}
-          {lastUpdate && (
-            <span>Updated {lastUpdate.toLocaleTimeString()}</span>
-          )}
+
+        <div className="flex items-center gap-4">
+          {/* Tab switcher */}
+          <nav className="flex gap-1 text-xs">
+            <button
+              onClick={() => setTab("dashboard")}
+              className={`px-3 py-1.5 rounded-md transition-colors ${
+                tab === "dashboard"
+                  ? "bg-[#1a1f35] text-[#e8eaf6]"
+                  : "text-[#7c85a2] hover:text-[#e8eaf6]"
+              }`}
+            >
+              Dashboard
+            </button>
+            <button
+              onClick={() => setTab("terminal")}
+              className={`px-3 py-1.5 rounded-md transition-colors font-mono ${
+                tab === "terminal"
+                  ? "bg-[#1a1f35] text-[#c9a84c]"
+                  : "text-[#7c85a2] hover:text-[#e8eaf6]"
+              }`}
+            >
+              &gt;_ Terminal
+            </button>
+          </nav>
+
+          {/* Status indicators */}
+          <div className="flex items-center gap-4 text-xs text-[#7c85a2]">
+            {health && (
+              <>
+                <span className={`flex items-center gap-1 ${health.status === "ok" ? "text-success" : "text-danger"}`}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                  {health.status.toUpperCase()}
+                </span>
+                <span>{health.exchange} • {health.env}</span>
+              </>
+            )}
+            {lastUpdate && (
+              <span>Updated {lastUpdate.toLocaleTimeString()}</span>
+            )}
+          </div>
         </div>
       </header>
 
-      <main className="px-6 py-6 max-w-screen-2xl mx-auto space-y-6">
-        {/* Stats row */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard
-            label="Total Equity"
-            value={`$${equity.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
-            sub={`Peak $${(portfolio?.peak_equity ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
-          />
-          <StatCard
-            label="Realized PnL"
-            value={`${pnl >= 0 ? "+" : ""}$${pnl.toFixed(2)}`}
-            color={pnl >= 0 ? "text-success" : "text-danger"}
-          />
-          <StatCard
-            label="Unrealized PnL"
-            value={`${unrealized >= 0 ? "+" : ""}$${unrealized.toFixed(2)}`}
-            color={unrealized >= 0 ? "text-success" : "text-danger"}
-          />
-          <StatCard
-            label="Max Drawdown"
-            value={`${(drawdown * 100).toFixed(2)}%`}
-            sub="Kill switch: 15%"
-            color={drawdown > 0.1 ? "text-danger" : drawdown > 0.05 ? "text-warning" : "text-success"}
-          />
-        </div>
-
-        {/* Equity chart */}
-        <div className="card">
-          <h3 className="text-sm font-semibold text-[#7c85a2] uppercase tracking-wider mb-4">
-            Equity Curve
-          </h3>
-          <PortfolioChart data={history} />
-        </div>
-
-        {/* Middle row */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <RiskMetrics performance={performance} drawdown={drawdown} />
-          <div className="lg:col-span-2">
-            <AgentStatus
-              cycle={cycle}
-              isRunning={isRunning}
-              onRunCycle={handleRunCycle}
+      {/* ── Dashboard tab ─────────────────────────────────────────────────── */}
+      {tab === "dashboard" && (
+        <main className="px-6 py-6 max-w-screen-2xl mx-auto space-y-6">
+          {/* Stats row */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <StatCard
+              label="Total Equity"
+              value={`$${equity.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+              sub={`Peak $${(portfolio?.peak_equity ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+            />
+            <StatCard
+              label="Realized PnL"
+              value={`${pnl >= 0 ? "+" : ""}$${pnl.toFixed(2)}`}
+              color={pnl >= 0 ? "text-success" : "text-danger"}
+            />
+            <StatCard
+              label="Unrealized PnL"
+              value={`${unrealized >= 0 ? "+" : ""}$${unrealized.toFixed(2)}`}
+              color={unrealized >= 0 ? "text-success" : "text-danger"}
+            />
+            <StatCard
+              label="Max Drawdown"
+              value={`${(drawdown * 100).toFixed(2)}%`}
+              sub="Kill switch: 15%"
+              color={drawdown > 0.1 ? "text-danger" : drawdown > 0.05 ? "text-warning" : "text-success"}
             />
           </div>
-        </div>
 
-        {/* Bottom row */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <SignalList signals={cycle?.signals ?? []} />
-          <TradeHistory trades={trades} />
+          {/* Equity chart */}
+          <div className="card">
+            <h3 className="text-sm font-semibold text-[#7c85a2] uppercase tracking-wider mb-4">
+              Equity Curve
+            </h3>
+            <PortfolioChart data={history} />
+          </div>
+
+          {/* Middle row */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <RiskMetrics performance={performance} drawdown={drawdown} />
+            <div className="lg:col-span-2">
+              <AgentStatus
+                cycle={cycle}
+                isRunning={isRunning}
+                onRunCycle={handleRunCycle}
+              />
+            </div>
+          </div>
+
+          {/* Bottom row */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <SignalList signals={cycle?.signals ?? []} />
+            <TradeHistory trades={trades} />
+          </div>
+        </main>
+      )}
+
+      {/* ── Terminal tab ───────────────────────────────────────────────────── */}
+      {tab === "terminal" && (
+        <div className="px-6 py-6 max-w-screen-2xl mx-auto" style={{ height: "calc(100vh - 73px)" }}>
+          <Terminal apiKey={wsApiKey} />
         </div>
-      </main>
+      )}
     </div>
   );
 }
