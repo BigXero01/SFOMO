@@ -1,0 +1,6 @@
+# Netlify deploy configuration
+# Publishes the static landing page in ./public — no build step required.
+
+[build]
+  publish = "public"
+  command = ""
